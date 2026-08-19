@@ -1,8 +1,9 @@
-import { Download, CheckCircle2, History } from "lucide-react";
+import { Download, CheckCircle2, History, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImportPanel } from "@/components/imports/import-panel";
 import { EmptyState } from "@/components/layout/empty-state";
+import { getCurrentProfile, isAdmin } from "@/lib/supabase/auth";
 
 const GUIDELINES = [
   "Use our template for best results",
@@ -11,7 +12,33 @@ const GUIDELINES = [
   "Duplicate stock numbers will be skipped",
 ];
 
-export default function ImportsPage() {
+export default async function ImportsPage() {
+  const profile = await getCurrentProfile();
+
+  // PROJECT_SCOPE §7 scopes Data Import to Admin specifically — staff manage
+  // operational data, but migrating the historical fleet is an admin action.
+  if (!isAdmin(profile)) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Data Import</h2>
+          <p className="text-sm text-muted-foreground">
+            Import your existing bikes data from Excel.
+          </p>
+        </div>
+        <Card className="py-5">
+          <CardContent className="px-5">
+            <EmptyState
+              icon={ShieldAlert}
+              title="Administrator access required"
+              description="Data import is limited to administrators. Contact an admin if you need historical bikes migrated from Excel."
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">

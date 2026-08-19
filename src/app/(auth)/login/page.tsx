@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoginForm } from "@/components/auth/login-form";
+import { AuthToast } from "@/components/auth/auth-toast";
 
 export const metadata: Metadata = { title: "Sign in — Motorcycle Salvage" };
 
@@ -25,6 +26,7 @@ export default function LoginPage() {
         {/* useSearchParams needs a Suspense boundary to keep the page static. */}
         <Suspense fallback={<Skeleton className="h-64 w-full" />}>
           <LoginForm />
+          <AuthToast />
         </Suspense>
       </CardContent>
     </Card>

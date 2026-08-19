@@ -29,7 +29,13 @@ import type { BikeListItem } from "@/types/bike";
 const PAGE_SIZE = 10;
 const ALL = "__all__";
 
-export function BikesTable({ bikes }: { bikes: BikeListItem[] }) {
+export function BikesTable({
+  bikes,
+  editable = false,
+}: {
+  bikes: BikeListItem[];
+  editable?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string>(ALL);
   const [page, setPage] = useState(1);
@@ -69,16 +75,22 @@ export function BikesTable({ bikes }: { bikes: BikeListItem[] }) {
       <EmptyState
         icon={BikeIcon}
         title="No bikes captured yet"
-        description="Add a salvage instruction manually, or bring your existing records across from Excel using Data Import."
+        description={
+          editable
+            ? "Add a salvage instruction manually, or bring your existing records across from Excel using Data Import."
+            : "No salvage bikes have been captured yet."
+        }
         action={
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button asChild size="sm">
-              <Link href="/bikes/new">Add first bike</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/imports">Import from Excel</Link>
-            </Button>
-          </div>
+          editable ? (
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button asChild size="sm">
+                <Link href="/bikes/new">Add first bike</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/imports">Import from Excel</Link>
+              </Button>
+            </div>
+          ) : undefined
         }
       />
     );

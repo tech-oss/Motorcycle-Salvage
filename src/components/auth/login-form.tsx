@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { login, type AuthState } from "@/app/(auth)/actions";
 import { FormError, FieldError } from "./form-feedback";
 
@@ -47,6 +48,7 @@ export function LoginForm() {
           type="email"
           autoComplete="email"
           placeholder="you@example.co.za"
+          autoFocus
           required
         />
         <FieldError messages={state.fieldErrors?.email} />
@@ -70,6 +72,13 @@ export function LoginForm() {
           required
         />
         <FieldError messages={state.fieldErrors?.password} />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Checkbox id="rememberMe" name="rememberMe" defaultChecked />
+        <Label htmlFor="rememberMe" className="text-sm font-normal text-muted-foreground">
+          Keep me signed in on this device
+        </Label>
       </div>
 
       <SubmitButton />

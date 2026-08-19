@@ -23,7 +23,7 @@ import {
   getBikesByLocation,
 } from "@/services/dashboard";
 import { getBikes } from "@/services/bikes";
-import { getCurrentProfile } from "@/lib/supabase/auth";
+import { getCurrentProfile, canWrite } from "@/lib/supabase/auth";
 
 const STAT_ICONS = [BikeIcon, FileClock, ClipboardList, Truck, Wrench];
 
@@ -40,6 +40,7 @@ export default async function DashboardPage() {
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? "there";
   const hasBikes = (stats[0]?.value ?? 0) > 0;
+  const editable = canWrite(profile);
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,12 +54,14 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button asChild className="gap-2">
-            <Link href="/bikes/new">
-              <Plus className="size-4" aria-hidden="true" />
-              New Instruction
-            </Link>
-          </Button>
+          {editable && (
+            <Button asChild className="gap-2">
+              <Link href="/bikes/new">
+                <Plus className="size-4" aria-hidden="true" />
+                New Instruction
+              </Link>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="icon"
@@ -88,22 +91,28 @@ export default async function DashboardPage() {
             <EmptyState
               icon={BikeIcon}
               title="No bikes yet"
-              description="Once you capture a salvage instruction or import your existing Excel data, your fleet metrics and recent instructions will appear here."
+              description={
+                editable
+                  ? "Once you capture a salvage instruction or import your existing Excel data, your fleet metrics and recent instructions will appear here."
+                  : "Once staff capture salvage instructions, your fleet metrics and recent instructions will appear here."
+              }
               action={
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button asChild size="sm" className="gap-2">
-                    <Link href="/bikes/new">
-                      <Plus className="size-4" aria-hidden="true" />
-                      Add first bike
-                    </Link>
-                  </Button>
-                  <Button asChild size="sm" variant="outline" className="gap-2">
-                    <Link href="/imports">
-                      <UploadCloud className="size-4" aria-hidden="true" />
-                      Import from Excel
-                    </Link>
-                  </Button>
-                </div>
+                editable ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button asChild size="sm" className="gap-2">
+                      <Link href="/bikes/new">
+                        <Plus className="size-4" aria-hidden="true" />
+                        Add first bike
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline" className="gap-2">
+                      <Link href="/imports">
+                        <UploadCloud className="size-4" aria-hidden="true" />
+                        Import from Excel
+                      </Link>
+                    </Button>
+                  </div>
+                ) : undefined
               }
             />
           </CardContent>

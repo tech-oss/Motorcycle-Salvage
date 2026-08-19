@@ -63,7 +63,8 @@ export async function login(
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const supabase = await createClient();
+  const rememberMe = formData.get("rememberMe") === "on";
+  const supabase = await createClient({ persistSession: rememberMe });
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
@@ -194,5 +195,7 @@ export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
-  redirect("/login");
+  // The redirect target carries the toast trigger — signOut can't await a
+  // client-side toast itself, since redirect() unmounts everything server-side.
+  redirect("/login?toast=signed-out");
 }
