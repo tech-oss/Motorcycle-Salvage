@@ -38,6 +38,18 @@ const SUPABASE_SHIM = `
     end if;
   end $$;
 
+  -- Supabase ships these default privileges, which hand anon full access to
+  -- tables as they are created. Modelling them here is essential: without it
+  -- the "anon has no privileges" assertion below passes trivially and hides a
+  -- real misconfiguration on the actual project.
+  alter default privileges in schema public
+    grant all on tables to anon, authenticated, service_role;
+  alter default privileges in schema public
+    grant all on functions to anon, authenticated, service_role;
+  alter default privileges in schema public
+    grant all on sequences to anon, authenticated, service_role;
+  grant usage on schema public to anon, authenticated, service_role;
+
   create table if not exists auth.users (
     id uuid primary key default gen_random_uuid(),
     email text,

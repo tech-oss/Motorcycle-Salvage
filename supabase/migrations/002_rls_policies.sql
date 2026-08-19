@@ -303,7 +303,20 @@ create policy "storage_photos_delete"
 -- Explicit rather than relying on Supabase's default privileges. Note `anon`
 -- gets nothing: this application has no public data, so an unauthenticated
 -- request should fail at the grant level, before RLS is even consulted.
+--
+-- Revoking is not optional. Supabase's own default privileges grant `anon`
+-- full table access as tables are created, so granting to other roles without
+-- revoking here would leave `anon` with SELECT on everything.
 -- ---------------------------------------------------------------------------
+
+alter default privileges in schema public revoke all on tables from anon;
+alter default privileges in schema public revoke all on functions from anon;
+alter default privileges in schema public revoke all on sequences from anon;
+
+revoke all on all tables in schema public from anon;
+revoke all on all functions in schema public from anon;
+revoke all on all sequences in schema public from anon;
+revoke usage on schema public from anon;
 
 grant usage on schema public to authenticated, service_role;
 
