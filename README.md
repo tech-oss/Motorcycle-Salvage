@@ -36,12 +36,19 @@ A cloud-based platform for managing salvage motorcycle records — instructions,
    cp .env.example .env.local
    ```
 
-   | Variable | Where to find it | Exposed to browser? |
-   |---|---|---|
-   | `NEXT_PUBLIC_SUPABASE_URL` | Project Settings → API → Project URL | Yes |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Project Settings → API → anon/public key | Yes |
-   | `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API → service_role key | **No — server-only, bypasses RLS** |
-   | `NEXT_PUBLIC_SITE_URL` | Your deployment origin | Yes |
+   All under **Project Settings → API Keys**. Supabase renamed these in 2025,
+   so the dashboard label depends on your project's age — both work, and the
+   env var names here are unaffected:
+
+   | Variable | Dashboard label (new) | Dashboard label (legacy) | Exposed to browser? |
+   |---|---|---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | Project URL | Project URL | Yes |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Publishable key `sb_publishable_…` | anon / public | Yes |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Secret key `sb_secret_…` | service_role | **No — server-only, bypasses RLS** |
+   | `NEXT_PUBLIC_SITE_URL` | — (your deployment origin) | — | Yes |
+
+   Legacy keys, if you need them, are on the **Legacy API Keys** tab of the
+   same page.
 
 3. Apply the database migrations — see [supabase/README.md](supabase/README.md):
 
