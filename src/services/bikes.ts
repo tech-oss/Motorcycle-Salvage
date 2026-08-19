@@ -221,6 +221,45 @@ export async function getBikeByStockNumber(
   };
 }
 
+/**
+ * Raw row shaped for the edit form. The form binds to database column names,
+ * so this deliberately skips the camelCase domain mapping — going Bike →
+ * form would mean maintaining a second, reverse mapping for no benefit.
+ *
+ * Nulls become "" because controlled inputs need strings; the Zod schema
+ * converts them back to null on submit.
+ */
+export async function getBikeForEdit(stockNumber: string): Promise<{
+  id: string;
+  values: Record<string, string | boolean>;
+} | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("salvage_bikes")
+    .select("*")
+    .ilike("stock_number", stockNumber)
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to load bike: ${error.message}`);
+  if (!data) return null;
+
+  const row = data as Record<string, unknown>;
+  const values: Record<string, string | boolean> = {};
+
+  for (const [key, value] of Object.entries(row)) {
+    if (key === "total_loss" || key === "archived") {
+      values[key] = Boolean(value);
+    } else if (value === null || value === undefined) {
+      values[key] = "";
+    } else {
+      values[key] = String(value);
+    }
+  }
+
+  return { id: data.id, values };
+}
+
 /** Stock numbers only — used to build QR/detail routes. */
 export async function getBikeStockNumbers(): Promise<string[]> {
   const supabase = await createClient();

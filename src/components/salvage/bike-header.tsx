@@ -46,9 +46,11 @@ export function BikeHeader({
 
         <div className="flex items-center gap-2">
           {editable && (
-            <Button variant="outline" className="gap-2">
-              <Pencil className="size-4" aria-hidden="true" />
-              Edit
+            <Button variant="outline" asChild className="gap-2">
+              <Link href={`/bikes/${bike.stockNumber}/edit`}>
+                <Pencil className="size-4" aria-hidden="true" />
+                Edit
+              </Link>
             </Button>
           )}
           <DropdownMenu>

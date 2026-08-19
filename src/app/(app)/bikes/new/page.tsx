@@ -1,8 +1,20 @@
 import Link from "next/link";
-import { ChevronRight, Plus } from "lucide-react";
-import { ModulePlaceholder } from "@/components/layout/module-placeholder";
+import { redirect } from "next/navigation";
+import { ChevronRight } from "lucide-react";
+import { BikeForm } from "@/components/salvage/bike-form";
+import { EMPTY_BIKE_FORM } from "@/lib/validations/bike";
+import { getBikeFormReferenceData } from "@/services/reference";
+import { getCurrentProfile, canWrite } from "@/lib/supabase/auth";
 
-export default function NewBikePage() {
+export default async function NewBikePage() {
+  const profile = await getCurrentProfile();
+
+  // Viewers have no create path; bounce rather than render a form whose
+  // submit RLS would reject anyway.
+  if (!canWrite(profile)) redirect("/bikes");
+
+  const reference = await getBikeFormReferenceData();
+
   return (
     <div className="flex flex-col gap-6">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -13,10 +25,20 @@ export default function NewBikePage() {
         <span className="text-foreground">New Instruction</span>
       </nav>
 
-      <ModulePlaceholder
-        title="New Salvage Instruction"
-        description="Manual data capture for a new bike record — identification, insurance, motorcycle, condition, location and financial fields — lands with the Salvage Bikes write path."
-        icon={Plus}
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">
+          New Salvage Instruction
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Only the stock number is required — the rest can be filled in as the
+          assessor and transporter report back.
+        </p>
+      </div>
+
+      <BikeForm
+        reference={reference}
+        defaultValues={EMPTY_BIKE_FORM}
+        cancelHref="/bikes"
       />
     </div>
   );
