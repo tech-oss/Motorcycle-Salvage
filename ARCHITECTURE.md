@@ -86,23 +86,37 @@ The bike detail page (`bikes/[stockNumber]`) uses **tabs within one route**, bac
 
 ## 4. Database Approach
 
-PostgreSQL via Supabase. The bike record is **normalized into a relational schema**, not stored as one wide Excel-shaped table. Proposed core tables (to be finalized when the Salvage Bikes module is built):
+PostgreSQL via Supabase. The bike record is **normalized into a relational schema**, not stored as one wide Excel-shaped table. Migrations under `supabase/migrations/` are the source of truth — nothing is created through the dashboard. See [supabase/README.md](supabase/README.md) for how to apply and validate them.
 
-- `bikes` — identification, motorcycle, condition, financial, and administrative fields that are 1:1 with a bike
-- `insurance_companies` — referenced by `bikes.insurance_company_id`
-- `transporters` — referenced by `bikes.transporter_id`
-- `locations` — referenced by `bikes.collection_location_id` / `current_location_id` / `storage_location_id` (a location is reused across bikes, so it's a lookup table, not free text)
-- `documents` — one row per uploaded file, `bike_id` FK, `type`, storage path, uploaded_by, uploaded_at
-- `photos` — one row per uploaded photo, `bike_id` FK, optional `category`, storage path
-- `communications` — one row per manual communication log entry, `bike_id` FK, `type`, `from`, `to`, `note`, `created_by`
-- `audit_log` — one row per tracked change, `bike_id` FK, `user_id`, `action`, `old_value`, `new_value`, `created_at`
-- `statuses` — a small reference table for the status workflow (not a hardcoded enum), so new statuses can be added without a schema migration touching application code
-- `users` / `profiles` — extends Supabase `auth.users` with `role` (admin/staff/viewer) and display info
-- `import_batches` / `import_rows` — tracks each Excel import run and the per-row outcome (imported/updated/skipped/invalid/duplicate) for auditability
+Implemented tables:
 
-Insurance companies, transporters, and locations are **lookup tables**, not free-text columns — this directly serves the "Bikes by Insurance" / "Bikes by Location" dashboard summaries and the Admin-managed Insurance Companies/Transporters/Locations sections.
+| Table | Purpose |
+|---|---|
+| `profiles` | Extends `auth.users` with `role` (admin/staff/viewer), `is_active`, display info |
+| `bike_statuses` | Workflow states as **data**, so the workflow extends without a code change |
+| `insurance_companies` | Lookup, referenced by `salvage_bikes.insurance_company_id` |
+| `transporters` | Lookup, referenced by `salvage_bikes.transporter_id` and `upliftments` |
+| `locations` | Lookup for collection/delivery/current/storage |
+| `salvage_bikes` | The one central record: identification, insurance, motorcycle, condition, location, financial, upliftment, administrative |
+| `upliftments` | History of upliftment instructions issued per bike |
+| `documents` | One row per uploaded file, `bike_id` FK, type, storage path |
+| `bike_photos` | One row per photo, `bike_id` FK, category, storage path |
+| `communications` | Manual communication timeline per bike |
+| `audit_logs` | Append-only change history |
 
-Row Level Security (RLS) is enabled on every table. Policies are role-aware (admin/staff/viewer) and are the actual enforcement layer — the app's role checks in UI/Server Actions are a UX convenience, not the security boundary.
+Decisions worth knowing:
+
+- **Status is a lookup table, not an enum.** PROJECT_SCOPE §18 requires an expandable workflow, so `salvage_bikes.status` is text with an FK to `bike_statuses(code)`. The column keeps the name the brief specified while staying extensible by inserting a row.
+- **Small stable sets are enums** (`document_type`, `photo_category`, `communication_type`, `keys_status`, `user_role`) — cheaper than a table, and still extendable via `ALTER TYPE ... ADD VALUE`.
+- **Location is stored both ways.** `collection_location` (text, as captured) sits alongside `collection_location_id` (FK). Historical Excel rows arrive as free text that may not match any known location, so the text is preserved verbatim while the FK powers reporting.
+- **Money is `numeric`, never float.**
+- **`created_by`/`updated_by`/`updated_at` are set by trigger** from `auth.uid()`, so a client cannot spoof authorship.
+- **Bike creation, status changes and archive/restore are audited by trigger**, so the trail doesn't depend on the application remembering to write one.
+- `import_batches` / `import_rows` are **not built yet** — they belong with the Excel import module.
+
+Row Level Security is enabled on every table and is the actual enforcement layer; the app's role checks are a UX convenience, not the security boundary. Policies are written against `SECURITY DEFINER` helper functions (`is_admin()`, `can_write()`, `can_read()`) — a non-definer function would re-enter the very `profiles` policies that call it and recurse forever.
+
+`anon` is granted **nothing** on the public schema: this application has no public data, so an unauthenticated request fails at the grant level before RLS is consulted.
 
 ## 5. Storage Approach
 
@@ -115,12 +129,16 @@ Objects are path-namespaced by bike, e.g. `documents/{bike_id}/{document_id}-{fi
 
 ## 6. Authentication & Authorization
 
-- **Supabase Auth** (email/password to start — the client did not ask for SSO/social login).
-- Session enforcement happens in `proxy.ts`: unauthenticated requests to any `(app)` route are redirected to `/login?redirect=<original-path>`, and login redirects back — this is exactly the QR code flow (scan → login → land on the bike record).
-- A `profiles` table stores `role: 'admin' | 'staff' | 'viewer'` per user, set by an Admin via the Users section.
+- **Supabase Auth** (email/password — the client did not ask for SSO/social login). Implemented flows: login, signup, forgot password, reset password, sign out.
+- Session enforcement happens in **`src/proxy.ts`** (Next.js 16's rename of `middleware.ts`): unauthenticated requests to any non-public route are redirected to `/login?redirect=<original-path>` and returned there after signing in — this is exactly the QR code flow (scan → login → land on the bike record).
+- The proxy calls `supabase.auth.getUser()`, never `getSession()`. `getSession()` only decodes the cookie, which the client controls; `getUser()` revalidates with Supabase.
+- `handle_new_user()` creates the `profiles` row on signup, defaulting to **`viewer`** — least privilege. An admin promotes from there.
+- `guard_profile_privileges()` blocks non-admins from changing any `role` or `is_active`, including their own, closing the self-promotion hole that a plain "users may edit their own profile" policy would otherwise leave open. RLS `WITH CHECK` cannot compare against the previous row, so this has to be a trigger.
+- The guard stands aside when `auth.uid()` is null (service role / SQL editor). That is deliberate: it is the only way the **first** admin can be created, and anonymous callers cannot reach it because every `profiles` policy is `to authenticated`.
 - Authorization is enforced at two layers:
   1. **RLS policies** in Postgres — the real boundary.
-  2. **UI/Server Action checks** — hide/disable actions the role can't perform, and defense-in-depth validation before mutations.
+  2. **UI/Server Action checks** (`src/lib/supabase/auth.ts`) — hide actions a role can't perform and fail fast, as defence in depth.
+- Login errors distinguish rejected credentials (generic message, so the endpoint can't be used to enumerate registered emails) from an unreachable backend (says so plainly, so a misconfiguration isn't mistaken for a typo). `forgotPassword` always reports success for the same anti-enumeration reason.
 
 ## 7. PDF Generation (Upliftment Instructions)
 

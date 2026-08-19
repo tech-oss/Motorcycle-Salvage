@@ -41,8 +41,22 @@ A cloud-based platform for managing salvage motorcycle records — instructions,
    | `NEXT_PUBLIC_SUPABASE_URL` | Project Settings → API → Project URL | Yes |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Project Settings → API → anon/public key | Yes |
    | `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API → service_role key | **No — server-only, bypasses RLS** |
+   | `NEXT_PUBLIC_SITE_URL` | Your deployment origin | Yes |
 
-3. Run the dev server:
+3. Apply the database migrations — see [supabase/README.md](supabase/README.md):
+
+   ```bash
+   npx supabase link --project-ref <your-project-ref> && npm run db:push
+   ```
+
+4. Sign up in the app, then promote yourself to admin (new accounts are
+   `viewer` by default). In the Supabase SQL editor:
+
+   ```sql
+   update public.profiles set role = 'admin' where email = 'you@example.co.za';
+   ```
+
+5. Run the dev server:
 
    ```bash
    npm run dev
@@ -53,11 +67,33 @@ A cloud-based platform for managing salvage motorcycle records — instructions,
 ### Available scripts
 
 ```bash
-npm run dev      # start the dev server (Turbopack)
-npm run build    # production build
-npm run start    # run a production build locally
-npm run lint     # ESLint
+npm run dev          # start the dev server (Turbopack)
+npm run build        # production build
+npm run start        # run a production build locally
+npm run lint         # ESLint
+npm run typecheck    # TypeScript, no emit
+npm run db:validate  # apply migrations to in-process Postgres and assert behaviour
+npm run db:push      # apply migrations to the linked Supabase project
+npm run db:types     # regenerate src/types/database.ts from the linked project
 ```
+
+`db:validate` needs no Docker, credentials or network — it runs the migrations
+against PGlite (Postgres compiled to WASM) with a shim for Supabase's managed
+`auth`/`storage` schemas, then asserts roles, triggers, constraints and
+cascades behave. Run it after any migration change.
+
+## Authentication
+
+Supabase Auth with email/password. Routes are gated in `src/proxy.ts` (Next.js
+16's replacement for `middleware.ts`): unauthenticated requests to any
+non-public route are redirected to `/login?redirect=<path>` and returned to
+that path after signing in — which is what makes a QR-code scan of a bike land
+on the right record.
+
+Authorization is enforced by **Row Level Security in the database**, not by the
+UI. The helpers in `src/lib/supabase/auth.ts` are for rendering and for failing
+fast in Server Actions; they are not the security boundary. See
+[supabase/README.md](supabase/README.md) for the role matrix.
 
 ## Project Structure
 

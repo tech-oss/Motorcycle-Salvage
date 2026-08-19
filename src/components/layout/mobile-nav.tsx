@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,8 @@ import {
 } from "@/components/ui/sheet";
 import { Logo } from "./logo";
 import { NavLinks } from "./nav-links";
-import { SidebarUser } from "./sidebar-user";
 
-export function MobileNav() {
+export function MobileNav({ userSlot }: { userSlot?: ReactNode }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -44,7 +43,7 @@ export function MobileNav() {
         <div className="flex-1 overflow-y-auto py-4">
           <NavLinks onNavigate={() => setOpen(false)} />
         </div>
-        <SidebarUser />
+        {userSlot}
       </SheetContent>
     </Sheet>
   );
