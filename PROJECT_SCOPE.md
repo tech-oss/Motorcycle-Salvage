@@ -2,7 +2,7 @@
 
 > This document is the permanent source of truth for what this product is, who it is for, and what Phase 1 does and does not include. Every future development session should read this file first. If a request conflicts with this document, flag the conflict before building — do not silently expand scope.
 
-Status: Phase 1 (Foundation) — no business modules built yet.
+Status: Phase 1 — mockup screens built against a fixture-data layer; Supabase not yet connected.
 Last updated: 2026-08-19.
 
 ---
@@ -58,7 +58,7 @@ The client asked for a **basic first version**. Do not over-build. Manual data e
 - Advanced workflow automation
 - Native mobile applications
 
-**The architecture should stay flexible enough to add these later (see [ARCHITECTURE.md](ARCHITECTURE.md#future-extensibility)), but no code, UI, or schema work should be spent implementing them now.** If a task description implies one of these, stop and confirm scope before proceeding.
+**The architecture should stay flexible enough to add these later (see [ARCHITECTURE.md](ARCHITECTURE.md#14-future-extensibility)), but no code, UI, or schema work should be spent implementing them now.** If a task description implies one of these, stop and confirm scope before proceeding.
 
 ## 5. Core Business Workflow
 
@@ -104,7 +104,7 @@ Authentication is required for all access to bike records.
 
 ## 9. Dashboard
 
-Displays (all values sourced from the database — no mock/static numbers):
+Displays (all values must ultimately come from the database — no mock/static numbers; currently served by the interim fixture layer, which computes them by aggregation rather than hardcoding):
 
 - Total Bikes
 - New Instructions
@@ -121,7 +121,7 @@ Plus:
 
 ## 10. Salvage Bike Record
 
-The bike record is translated into a **clean relational schema** — it should not blindly mirror the client's Excel column layout. Group by domain, not by spreadsheet habit. See [ARCHITECTURE.md](ARCHITECTURE.md#database-approach) for the relational breakdown of the fields below.
+The bike record is translated into a **clean relational schema** — it should not blindly mirror the client's Excel column layout. Group by domain, not by spreadsheet habit. See [ARCHITECTURE.md](ARCHITECTURE.md#4-database-approach) for the relational breakdown of the fields below.
 
 ### Identification
 Stock number, file number, claim number, status.
@@ -257,7 +257,7 @@ Tone: premium, dark, automotive, modern SaaS. Subtle borders, rounded cards, gen
 | Secondary | `#94A3B8` | Secondary/muted text |
 | Border | `#243241` | Borders, dividers |
 
-See [ARCHITECTURE.md](ARCHITECTURE.md#design-tokens) for how these are wired into Tailwind/shadcn theme tokens.
+See [ARCHITECTURE.md](ARCHITECTURE.md#10-design-tokens) for how these are wired into Tailwind/shadcn theme tokens.
 
 ## 21. Responsiveness
 
@@ -292,10 +292,11 @@ Dependencies are kept lean — no library is added without a concrete Phase 1 us
 - Advanced workflow automation
 - Accounting system integrations
 
-The architecture is intentionally structured (see [ARCHITECTURE.md](ARCHITECTURE.md#future-extensibility)) so these can be layered in later without a rewrite — e.g. documents already carry a `source` concept that can later distinguish "manually uploaded" from "auto-ingested."
+The architecture is intentionally structured (see [ARCHITECTURE.md](ARCHITECTURE.md#14-future-extensibility)) so these can be layered in later without a rewrite — e.g. documents already carry a `source` concept that can later distinguish "manually uploaded" from "auto-ingested."
 
 ---
 
 ## Change Log
 
 - 2026-08-19 — Initial scope document created; project foundation (Next.js app shell, design system, docs) established. No business modules built yet.
+- 2026-08-19 — Client's approved UI mockup received (6 screens: Dashboard, Salvage Bike List, Bike Details, Data Import, Documents & Photos, QR Code Sticker). Built all six against a typed fixture-data layer pending the Supabase connection — see [ARCHITECTURE.md](ARCHITECTURE.md#13-fixture-data-layer-interim).

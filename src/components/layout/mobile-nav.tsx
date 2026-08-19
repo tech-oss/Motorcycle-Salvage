@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bike, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -11,7 +11,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Logo } from "./logo";
 import { NavLinks } from "./nav-links";
+import { SidebarUser } from "./sidebar-user";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
@@ -34,27 +36,15 @@ export function MobileNav() {
       >
         <SheetHeader className="border-b border-sidebar-border">
           <SheetTitle asChild>
-            <Link
-              href="/dashboard"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5"
-            >
-              <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <Bike className="size-4.5" aria-hidden="true" />
-              </span>
-              <span className="text-sm leading-tight font-semibold text-sidebar-foreground">
-                Salvage
-                <br />
-                <span className="text-xs font-normal text-muted-foreground">
-                  Management Platform
-                </span>
-              </span>
+            <Link href="/dashboard" onClick={() => setOpen(false)}>
+              <Logo />
             </Link>
           </SheetTitle>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto py-4">
           <NavLinks onNavigate={() => setOpen(false)} />
         </div>
+        <SidebarUser />
       </SheetContent>
     </Sheet>
   );
