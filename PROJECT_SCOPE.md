@@ -2,7 +2,7 @@
 
 > This document is the permanent source of truth for what this product is, who it is for, and what Phase 1 does and does not include. Every future development session should read this file first. If a request conflicts with this document, flag the conflict before building — do not silently expand scope.
 
-Status: Phase 1 — mockup screens built against a fixture-data layer; Supabase not yet connected.
+Status: Phase 1 — Supabase connected; UI reads live data. Write/edit forms, uploads and Excel import still to build.
 Last updated: 2026-08-19.
 
 ---
@@ -104,7 +104,7 @@ Authentication is required for all access to bike records.
 
 ## 9. Dashboard
 
-Displays (all values must ultimately come from the database — no mock/static numbers; currently served by the interim fixture layer, which computes them by aggregation rather than hardcoding):
+Displays (all values come from the database — no mock/static numbers):
 
 - Total Bikes
 - New Instructions
@@ -299,4 +299,5 @@ The architecture is intentionally structured (see [ARCHITECTURE.md](ARCHITECTURE
 ## Change Log
 
 - 2026-08-19 — Initial scope document created; project foundation (Next.js app shell, design system, docs) established. No business modules built yet.
-- 2026-08-19 — Client's approved UI mockup received (6 screens: Dashboard, Salvage Bike List, Bike Details, Data Import, Documents & Photos, QR Code Sticker). Built all six against a typed fixture-data layer pending the Supabase connection — see [ARCHITECTURE.md](ARCHITECTURE.md#13-fixture-data-layer-interim).
+- 2026-08-19 — Client's approved UI mockup received (6 screens: Dashboard, Salvage Bike List, Bike Details, Data Import, Documents & Photos, QR Code Sticker). Built all six against a typed fixture-data layer pending the Supabase connection.
+- 2026-08-19 — Supabase backend built (migrations, RLS, auth) and connected. Fixture layer replaced by real queries in `services/*`; see [ARCHITECTURE.md](ARCHITECTURE.md#13-data-access-layer).

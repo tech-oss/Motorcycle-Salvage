@@ -8,16 +8,34 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils";
-import type { BikeDocument } from "@/types/bike";
+import { EmptyState } from "@/components/layout/empty-state";
+import { formatDate, formatFileSize } from "@/lib/utils";
+import type { BikeDocument, DocumentType } from "@/types/bike";
 
-export function DocumentsList({ documents }: { documents: BikeDocument[] }) {
+const TYPE_LABELS: Record<DocumentType, string> = {
+  insurance_report: "Insurance Report",
+  release_invoice: "Release Invoice",
+  transport_invoice: "Transport Invoice",
+  pop: "POP",
+  purchase_agreement: "Purchase Agreement",
+  upliftment_instruction: "Upliftment Instruction",
+  other: "Other",
+};
+
+export function DocumentsList({
+  documents,
+  editable = false,
+}: {
+  documents: BikeDocument[];
+  editable?: boolean;
+}) {
   if (documents.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-16 text-center">
-        <FileText className="size-8 text-muted-foreground" aria-hidden="true" />
-        <p className="text-sm text-muted-foreground">No documents uploaded yet.</p>
-      </div>
+      <EmptyState
+        icon={FileText}
+        title="No documents yet"
+        description="Upload insurance reports, invoices, proof of payment or agreements for this bike."
+      />
     );
   }
 
@@ -33,11 +51,12 @@ export function DocumentsList({ documents }: { documents: BikeDocument[] }) {
               {doc.name}
             </p>
             <p className="truncate text-xs text-muted-foreground">
-              {formatDate(doc.uploadedAt)} · {doc.uploadedBy} · {doc.sizeLabel}
+              {formatDate(doc.uploadedAt)}
+              {doc.fileSize ? ` · ${formatFileSize(doc.fileSize)}` : ""}
             </p>
           </div>
           <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">
-            {doc.type}
+            {TYPE_LABELS[doc.type]}
           </Badge>
           <DropdownMenu>
             <DropdownMenuTrigger className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
@@ -48,14 +67,18 @@ export function DocumentsList({ documents }: { documents: BikeDocument[] }) {
                 <Download className="size-4" aria-hidden="true" />
                 Download
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Pencil className="size-4" aria-hidden="true" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive">
-                <Trash2 className="size-4" aria-hidden="true" />
-                Delete
-              </DropdownMenuItem>
+              {editable && (
+                <>
+                  <DropdownMenuItem>
+                    <Pencil className="size-4" aria-hidden="true" />
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive">
+                    <Trash2 className="size-4" aria-hidden="true" />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </li>

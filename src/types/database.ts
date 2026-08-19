@@ -106,6 +106,7 @@ export interface Database {
           role?: UserRole;
           is_active?: boolean;
         };
+        Relationships: [];
       };
 
       bike_statuses: {
@@ -126,6 +127,7 @@ export interface Database {
           sort_order?: number;
           is_archived_state?: boolean;
         };
+        Relationships: [];
       };
 
       insurance_companies: {
@@ -162,6 +164,7 @@ export interface Database {
           notes?: string | null;
           archived?: boolean;
         };
+        Relationships: [];
       };
 
       transporters: {
@@ -198,6 +201,7 @@ export interface Database {
           notes?: string | null;
           archived?: boolean;
         };
+        Relationships: [];
       };
 
       locations: {
@@ -237,6 +241,7 @@ export interface Database {
           notes?: string | null;
           archived?: boolean;
         };
+        Relationships: [];
       };
 
       salvage_bikes: {
@@ -329,6 +334,7 @@ export interface Database {
             "id" | "created_at" | "updated_at" | "created_by"
           >
         >;
+        Relationships: [];
       };
 
       upliftments: {
@@ -376,6 +382,7 @@ export interface Database {
             "id" | "created_at" | "updated_at" | "created_by"
           >
         >;
+        Relationships: [];
       };
 
       documents: {
@@ -413,6 +420,7 @@ export interface Database {
           notes?: string | null;
           upliftment_id?: string | null;
         };
+        Relationships: [];
       };
 
       bike_photos: {
@@ -445,6 +453,7 @@ export interface Database {
           caption?: string | null;
           sort_order?: number;
         };
+        Relationships: [];
       };
 
       communications: {
@@ -480,6 +489,7 @@ export interface Database {
           subject?: string | null;
           note?: string;
         };
+        Relationships: [];
       };
 
       audit_logs: {
@@ -510,8 +520,11 @@ export interface Database {
         };
         // Append-only: no RLS policy permits UPDATE.
         Update: never;
+        Relationships: [];
       };
     };
+
+    Views: Record<string, never>;
 
     Functions: {
       current_user_role: { Args: Record<string, never>; Returns: UserRole };
@@ -519,6 +532,8 @@ export interface Database {
       can_write: { Args: Record<string, never>; Returns: boolean };
       can_read: { Args: Record<string, never>; Returns: boolean };
     };
+
+    CompositeTypes: Record<string, never>;
 
     Enums: {
       user_role: UserRole;

@@ -1,17 +1,17 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { STATUS_COLORS } from "@/lib/fixtures/bikes";
-import type { BikeStatus } from "@/types/bike";
+import { statusMeta } from "@/lib/status";
 
-export function StatusBadge({ status }: { status: BikeStatus }) {
-  const colors = STATUS_COLORS[status];
+/** `status` is the database code (e.g. "new_instruction"), not a label. */
+export function StatusBadge({ status }: { status: string }) {
+  const meta = statusMeta(status);
   return (
     <Badge
       variant="outline"
-      className={cn("gap-1.5 font-medium whitespace-nowrap", colors.badge)}
+      className={cn("gap-1.5 font-medium whitespace-nowrap", meta.badge)}
     >
-      <span className={cn("size-1.5 rounded-full", colors.dot)} aria-hidden="true" />
-      {status}
+      <span className={cn("size-1.5 rounded-full", meta.dot)} aria-hidden="true" />
+      {meta.label}
     </Badge>
   );
 }

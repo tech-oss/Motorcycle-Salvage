@@ -4,29 +4,27 @@ import Image from "next/image";
 import { ChevronRight, Printer, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getBikeByStockNumber, getBikes } from "@/lib/fixtures/bikes";
+import { getBikeByStockNumber } from "@/services/bikes";
 import { generateBikeQrDataUrl, bikeRecordUrl } from "@/lib/qr/generate";
 import { QrDownloadButtons } from "@/components/salvage/qr-download-buttons";
-
-export function generateStaticParams() {
-  return getBikes().map((bike) => ({ stockNumber: bike.stockNumber }));
-}
+import { describeBike } from "@/lib/utils";
 
 export default async function QrCodePage({
   params,
 }: PageProps<"/bikes/[stockNumber]/qr-code">) {
   const { stockNumber } = await params;
-  const bike = getBikeByStockNumber(stockNumber);
+  const bike = await getBikeByStockNumber(stockNumber);
 
   if (!bike) notFound();
 
   const qrDataUrl = await generateBikeQrDataUrl(bike.stockNumber);
   const targetUrl = bikeRecordUrl(bike.stockNumber);
+  const makeModel = describeBike({ make: bike.make, model: bike.model });
 
   const details: Array<[string, string]> = [
     ["Stock Number", bike.stockNumber],
-    ["Make / Model", `${bike.make} ${bike.model}`],
-    ["Year", String(bike.year)],
+    ["Make / Model", makeModel],
+    ["Year", bike.year ? String(bike.year) : "—"],
     ["Size", "70mm x 50mm"],
   ];
 
@@ -88,13 +86,11 @@ export default async function QrCodePage({
                 </div>
                 <div className="flex justify-between border-b border-black/10 py-1">
                   <dt className="text-black/50">Make / Model</dt>
-                  <dd className="font-semibold">
-                    {bike.make} {bike.model}
-                  </dd>
+                  <dd className="font-semibold">{makeModel}</dd>
                 </div>
                 <div className="flex justify-between py-1">
                   <dt className="text-black/50">Year</dt>
-                  <dd className="font-semibold">{bike.year}</dd>
+                  <dd className="font-semibold">{bike.year ?? "—"}</dd>
                 </div>
               </dl>
 

@@ -7,10 +7,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/salvage/status-badge";
 import type { Bike } from "@/types/bike";
 
-export function BikeHeader({ bike }: { bike: Bike }) {
+export function BikeHeader({
+  bike,
+  editable,
+}: {
+  bike: Bike;
+  editable: boolean;
+}) {
   return (
     <div className="flex flex-col gap-4">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -22,7 +29,7 @@ export function BikeHeader({ bike }: { bike: Bike }) {
       </nav>
 
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-lg bg-accent text-primary">
             <Lock className="size-4" aria-hidden="true" />
           </span>
@@ -30,13 +37,20 @@ export function BikeHeader({ bike }: { bike: Bike }) {
             {bike.stockNumber}
           </h2>
           <StatusBadge status={bike.status} />
+          {bike.archived && (
+            <Badge variant="outline" className="text-muted-foreground">
+              Archived
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2">
-            <Pencil className="size-4" aria-hidden="true" />
-            Edit
-          </Button>
+          {editable && (
+            <Button variant="outline" className="gap-2">
+              <Pencil className="size-4" aria-hidden="true" />
+              Edit
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" aria-label="More actions">

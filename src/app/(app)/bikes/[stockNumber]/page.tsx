@@ -10,23 +10,26 @@ import { NotesTimeline } from "@/components/salvage/notes-timeline";
 import { DocumentsList } from "@/components/documents/documents-list";
 import { PhotosGrid } from "@/components/photos/photos-grid";
 import { BikeUpliftmentPanel } from "@/components/upliftments/bike-upliftment-panel";
-import { getBikeByStockNumber, getBikes } from "@/lib/fixtures/bikes";
-
-export function generateStaticParams() {
-  return getBikes().map((bike) => ({ stockNumber: bike.stockNumber }));
-}
+import { getBikeByStockNumber } from "@/services/bikes";
+import { canWrite } from "@/lib/supabase/auth";
+import { getCurrentProfile } from "@/lib/supabase/auth";
 
 export default async function BikeDetailPage({
   params,
 }: PageProps<"/bikes/[stockNumber]">) {
   const { stockNumber } = await params;
-  const bike = getBikeByStockNumber(stockNumber);
+  const [bike, profile] = await Promise.all([
+    getBikeByStockNumber(stockNumber),
+    getCurrentProfile(),
+  ]);
 
   if (!bike) notFound();
 
+  const editable = canWrite(profile);
+
   return (
     <div className="flex flex-col gap-6">
-      <BikeHeader bike={bike} />
+      <BikeHeader bike={bike} editable={editable} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
         <BikePhotoPanel bike={bike} />
@@ -37,9 +40,13 @@ export default async function BikeDetailPage({
             <TabsTrigger value="documents">
               Documents ({bike.documents.length})
             </TabsTrigger>
-            <TabsTrigger value="photos">Photos ({bike.photos.length})</TabsTrigger>
+            <TabsTrigger value="photos">
+              Photos ({bike.photos.length})
+            </TabsTrigger>
             <TabsTrigger value="upliftment">Upliftment</TabsTrigger>
-            <TabsTrigger value="notes">Notes</TabsTrigger>
+            <TabsTrigger value="notes">
+              Notes ({bike.communications.length})
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-4">
@@ -54,12 +61,14 @@ export default async function BikeDetailPage({
                     {bike.documents.length} document
                     {bike.documents.length === 1 ? "" : "s"}
                   </p>
-                  <Button size="sm" className="gap-2">
-                    <Upload className="size-4" aria-hidden="true" />
-                    Upload Files
-                  </Button>
+                  {editable && (
+                    <Button size="sm" className="gap-2">
+                      <Upload className="size-4" aria-hidden="true" />
+                      Upload Files
+                    </Button>
+                  )}
                 </div>
-                <DocumentsList documents={bike.documents} />
+                <DocumentsList documents={bike.documents} editable={editable} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -71,12 +80,14 @@ export default async function BikeDetailPage({
                   <p className="text-sm text-muted-foreground">
                     Photos ({bike.photos.length})
                   </p>
-                  <Button size="sm" className="gap-2">
-                    <Upload className="size-4" aria-hidden="true" />
-                    Upload Files
-                  </Button>
+                  {editable && (
+                    <Button size="sm" className="gap-2">
+                      <Upload className="size-4" aria-hidden="true" />
+                      Upload Files
+                    </Button>
+                  )}
                 </div>
-                <PhotosGrid photos={bike.photos} />
+                <PhotosGrid photos={bike.photos} editable={editable} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -88,7 +99,7 @@ export default async function BikeDetailPage({
           <TabsContent value="notes" className="mt-4">
             <Card className="gap-4 py-5">
               <CardContent className="px-5">
-                <NotesTimeline notes={bike.notes} />
+                <NotesTimeline notes={bike.communications} />
               </CardContent>
             </Card>
           </TabsContent>

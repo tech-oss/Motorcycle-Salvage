@@ -1,17 +1,8 @@
-import { Download, CheckCircle2 } from "lucide-react";
+import { Download, CheckCircle2, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { ImportPanel } from "@/components/imports/import-panel";
-import { RECENT_IMPORTS } from "@/lib/fixtures/dashboard";
+import { EmptyState } from "@/components/layout/empty-state";
 
 const GUIDELINES = [
   "Use our template for best results",
@@ -50,7 +41,10 @@ export default function ImportsPage() {
           <CardContent className="px-5">
             <ul className="flex flex-col gap-3 text-sm">
               {GUIDELINES.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-muted-foreground">
+                <li
+                  key={item}
+                  className="flex items-start gap-2 text-muted-foreground"
+                >
                   <CheckCircle2
                     className="mt-0.5 size-4 shrink-0 text-primary"
                     aria-hidden="true"
@@ -68,44 +62,15 @@ export default function ImportsPage() {
           <CardTitle className="text-base">Recent Imports</CardTitle>
         </CardHeader>
         <CardContent className="px-5">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
-                  <TableHead>File Name</TableHead>
-                  <TableHead>Imported By</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Records</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {RECENT_IMPORTS.map((row) => (
-                  <TableRow key={row.fileName} className="border-border">
-                    <TableCell className="font-medium">{row.fileName}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {row.importedBy}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {row.date}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {row.records}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className="gap-1.5 border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
-                      >
-                        <CheckCircle2 className="size-3" aria-hidden="true" />
-                        {row.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          {/* Import runs will be recorded in import_batches / import_rows once
+              the import pipeline writes to the database (ARCHITECTURE.md §4).
+              Showing an empty state beats inventing a history that never
+              happened. */}
+          <EmptyState
+            icon={History}
+            title="No imports yet"
+            description="Once you run an import, each batch will be listed here with its outcome — imported, updated, skipped, invalid and duplicate counts."
+          />
         </CardContent>
       </Card>
     </div>

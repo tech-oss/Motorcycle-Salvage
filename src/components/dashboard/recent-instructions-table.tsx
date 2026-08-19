@@ -8,10 +8,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/salvage/status-badge";
-import type { Bike } from "@/types/bike";
-import { formatDate } from "@/lib/utils";
+import type { BikeListItem } from "@/types/bike";
+import { formatDate, describeBike } from "@/lib/utils";
 
-export function RecentInstructionsTable({ bikes }: { bikes: Bike[] }) {
+export function RecentInstructionsTable({ bikes }: { bikes: BikeListItem[] }) {
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -27,7 +27,7 @@ export function RecentInstructionsTable({ bikes }: { bikes: Bike[] }) {
         </TableHeader>
         <TableBody>
           {bikes.map((bike) => (
-            <TableRow key={bike.stockNumber} className="border-border">
+            <TableRow key={bike.id} className="border-border">
               <TableCell>
                 <Link
                   href={`/bikes/${bike.stockNumber}`}
@@ -37,13 +37,11 @@ export function RecentInstructionsTable({ bikes }: { bikes: Bike[] }) {
                 </Link>
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {bike.claimNumber}
+                {bike.claimNumber ?? "—"}
               </TableCell>
-              <TableCell>
-                {bike.make} {bike.model} {bike.year}
-              </TableCell>
+              <TableCell>{describeBike(bike)}</TableCell>
               <TableCell className="text-muted-foreground">
-                {bike.insuranceCompany}
+                {bike.insuranceCompany ?? "—"}
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {formatDate(bike.dateReceived)}

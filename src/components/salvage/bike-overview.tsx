@@ -1,12 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrencyZAR, formatDate } from "@/lib/utils";
 import type { Bike } from "@/types/bike";
+
+const KEYS_LABELS: Record<string, string> = {
+  yes: "Yes",
+  no: "No",
+  tbc: "TBC",
+};
 
 function InfoList({ rows }: { rows: Array<[string, string]> }) {
   return (
     <dl className="flex flex-col gap-3 text-sm">
       {rows.map(([label, value]) => (
         <div key={label} className="flex items-start justify-between gap-4">
-          <dt className="text-muted-foreground">{label}</dt>
+          <dt className="shrink-0 text-muted-foreground">{label}</dt>
           <dd className="text-right font-medium break-words text-foreground">
             {value}
           </dd>
@@ -16,9 +23,14 @@ function InfoList({ rows }: { rows: Array<[string, string]> }) {
   );
 }
 
+const dash = (v: string | number | null | undefined) =>
+  v === null || v === undefined || v === "" ? "—" : String(v);
+
+const money = (v: number | null) => (v === null ? "—" : formatCurrencyZAR(v));
+
 export function BikeOverview({ bike }: { bike: Bike }) {
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
       <Card className="gap-3 py-5">
         <CardHeader className="px-5">
           <CardTitle className="text-sm text-muted-foreground">
@@ -28,15 +40,21 @@ export function BikeOverview({ bike }: { bike: Bike }) {
         <CardContent className="px-5">
           <InfoList
             rows={[
-              ["Make", bike.make],
-              ["Model", bike.model],
-              ["Year", String(bike.year)],
-              ["Colour", bike.colour],
-              ["Engine No.", bike.engineNumber],
-              ["VIN", bike.vin],
-              ["Registration", bike.registrationNumber],
-              ["Odometer", `${bike.odometer.toLocaleString()} km`],
-              ["Keys", bike.keysStatus],
+              ["Make", dash(bike.make)],
+              ["Model", dash(bike.model)],
+              ["Year", dash(bike.year)],
+              ["Colour", dash(bike.colour)],
+              ["Engine No.", dash(bike.engineNumber)],
+              ["VIN", dash(bike.vin)],
+              ["Registration", dash(bike.registrationNumber)],
+              [
+                "Odometer",
+                bike.odometer !== null
+                  ? `${bike.odometer.toLocaleString("en-ZA")} km`
+                  : "—",
+              ],
+              ["Keys", bike.keysStatus ? KEYS_LABELS[bike.keysStatus] : "—"],
+              ["Write-off Code", dash(bike.writeOffCode)],
             ]}
           />
         </CardContent>
@@ -51,12 +69,15 @@ export function BikeOverview({ bike }: { bike: Bike }) {
         <CardContent className="px-5">
           <InfoList
             rows={[
-              ["Insurance", bike.insuranceCompany],
-              ["Broker", bike.broker],
-              ["Assessor", bike.assessor],
-              ["Contact", bike.assessorContact],
-              ["Insured", bike.insuredName],
-              ["Email", bike.insuredEmail],
+              ["Insurance", dash(bike.insuranceCompany)],
+              ["Broker", dash(bike.broker)],
+              ["Assessor", dash(bike.assessor)],
+              ["Contact", dash(bike.assessorContact)],
+              ["Claim No.", dash(bike.claimNumber)],
+              ["Loss Date", formatDate(bike.lossDate)],
+              ["Insured", dash(bike.insuredName)],
+              ["Phone", dash(bike.insuredPhone)],
+              ["Email", dash(bike.insuredEmail)],
             ]}
           />
         </CardContent>
@@ -69,10 +90,38 @@ export function BikeOverview({ bike }: { bike: Bike }) {
         <CardContent className="px-5">
           <InfoList
             rows={[
-              ["Collection", bike.collectionLocation],
-              ["Delivery", bike.deliveryLocation],
-              ["Current Location", bike.currentLocation],
-              ["Storage", bike.storageLocation],
+              ["Collection", dash(bike.collectionLocation)],
+              ["Contact", dash(bike.collectionContact)],
+              ["Phone", dash(bike.collectionPhone)],
+              ["Delivery", dash(bike.deliveryLocation)],
+              ["Current Location", dash(bike.currentLocation)],
+              ["Storage", dash(bike.storageLocation)],
+            ]}
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="gap-3 py-5">
+        <CardHeader className="px-5">
+          <CardTitle className="text-sm text-muted-foreground">
+            Financial Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-5">
+          <InfoList
+            rows={[
+              ["Retail Value", money(bike.retailValue)],
+              ["Salvage Value", money(bike.salvageValue)],
+              [
+                "Salvage %",
+                bike.salvagePercentage !== null
+                  ? `${bike.salvagePercentage}%`
+                  : "—",
+              ],
+              ["Commission", money(bike.commission)],
+              ["Release Fee", money(bike.releaseFee)],
+              ["Estimator Cost", money(bike.estimatorCost)],
+              ["Total Loss", bike.totalLoss ? "Yes" : "No"],
             ]}
           />
         </CardContent>
