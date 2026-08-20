@@ -41,6 +41,22 @@ export const STATUS_META: Record<
     badge: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
     dot: "bg-emerald-400",
   },
+  // Seeded by 007 from the client's own master workbook vocabulary.
+  not_sold: {
+    label: "Not Sold",
+    badge: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30",
+    dot: "bg-yellow-400",
+  },
+  sold: {
+    label: "Sold",
+    badge: "bg-green-500/15 text-green-300 border-green-500/30",
+    dot: "bg-green-400",
+  },
+  no_salvage: {
+    label: "No Salvage",
+    badge: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+    dot: "bg-rose-400",
+  },
   archived: {
     label: "Archived",
     badge: "bg-slate-500/15 text-slate-300 border-slate-500/30",

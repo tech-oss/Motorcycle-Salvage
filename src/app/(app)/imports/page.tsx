@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ImportPanel } from "@/components/imports/import-panel";
 import { DownloadTemplateButton } from "@/components/imports/download-template-button";
+import { ExportMasterButton } from "@/components/imports/export-master-button";
 import { EmptyState } from "@/components/layout/empty-state";
 import { getCurrentProfile, isAdmin } from "@/lib/supabase/auth";
 import { getRecentImportBatches } from "@/services/imports";
@@ -53,7 +54,10 @@ export default async function ImportsPage() {
             Import your existing bikes data from Excel.
           </p>
         </div>
-        <DownloadTemplateButton />
+        <div className="flex flex-wrap gap-2">
+          <DownloadTemplateButton />
+          <ExportMasterButton />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">

@@ -65,6 +65,10 @@ export type BikeStatusCode =
   | "in_transit"
   | "received"
   | "ready_for_sale"
+  // Seeded by 007 from the client's master workbook.
+  | "not_sold"
+  | "sold"
+  | "no_salvage"
   | "archived";
 
 export type Json =
@@ -321,6 +325,18 @@ export interface Database {
           created_by: string | null;
           updated_by: string | null;
           archived: boolean;
+
+          // Added by 007 for the client's master workbook.
+          engine_capacity_cc: number | null;
+          claims_handler: string | null;
+          salvage_clerk: string | null;
+          arrival_date: string | null;
+          sold_to: string | null;
+          selling_amount: number | null;
+          insurance_invoice_no: string | null;
+          insurance_amount: number | null;
+          source_row: Json | null;
+          import_batch_id: string | null;
         };
         Insert: Partial<
           Omit<
@@ -517,7 +533,16 @@ export interface Database {
           invalid_count?: number;
           duplicate_count?: number;
         };
-        Update: never;
+        // Counts are written when the run finishes, so the row is created
+        // first and tallied afterwards.
+        Update: {
+          total_rows?: number;
+          imported_count?: number;
+          updated_count?: number;
+          skipped_count?: number;
+          invalid_count?: number;
+          duplicate_count?: number;
+        };
         Relationships: [];
       };
 

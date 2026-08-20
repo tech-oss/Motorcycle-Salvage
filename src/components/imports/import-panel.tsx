@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -31,17 +32,30 @@ import {
 import { ImportDropzone } from "./import-dropzone";
 import {
   IMPORT_TARGET_FIELDS,
+  detectHeaderRow,
+  guessTargetField,
   normalizeImportRow,
   type ImportTargetField,
   type MappedRow,
   type NormalizedRow,
 } from "@/lib/validations/import";
-import { checkDuplicateStockNumbers, runImport } from "@/app/(app)/imports/actions";
+import {
+  beginImport,
+  checkDuplicateStockNumbers,
+  finalizeImport,
+  importChunk,
+} from "@/app/(app)/imports/actions";
+
+type ParsedSheet = {
+  /** Every row as raw strings, including the banner rows above the headers. */
+  allRows: string[][];
+  headerIndex: number;
+};
 
 type ParsedWorkbook = {
   fileName: string;
   sheetNames: string[];
-  sheets: Record<string, { headers: string[]; rows: string[][] }>;
+  sheets: Record<string, ParsedSheet>;
 };
 
 /** header index -> target field, or undefined for "do not import". */
@@ -56,10 +70,11 @@ type Wizard =
       sheetName: string;
       validRows: NormalizedRow[];
       invalidErrors: string[];
+      warnings: string[];
       duplicates: Set<string>;
       decisions: Record<string, "skip" | "overwrite">;
     }
-  | { step: "importing" }
+  | { step: "importing"; done: number; total: number }
   | {
       step: "result";
       imported: number;
@@ -67,19 +82,11 @@ type Wizard =
       skipped: number;
       invalid: number;
       duplicates: number;
+      failures: string[];
     };
 
-function guessField(header: string): ImportTargetField | undefined {
-  const h = header.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-  for (const field of IMPORT_TARGET_FIELDS) {
-    const label = field.label.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const value = field.value.replace(/_/g, "");
-    if (h === label || h === value || h.includes(value) || value.includes(h)) {
-      return field.value;
-    }
-  }
-  return undefined;
-}
+/** Rows per Server Action call — keeps each request under the body limit. */
+const IMPORT_CHUNK_SIZE = 100;
 
 export function ImportPanel() {
   const router = useRouter();
@@ -98,26 +105,18 @@ export function ImportPanel() {
 
       const sheets: ParsedWorkbook["sheets"] = {};
       for (const name of workbook.SheetNames) {
-        const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], {
+        const raw = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], {
           header: 1,
           blankrows: false,
           raw: false,
         });
-        const headers = (rows[0] ?? []).map((h) => String(h ?? "").trim());
-        const dataRows = rows
-          .slice(1)
-          .map((r) => headers.map((_, i) => String(r[i] ?? "")));
-        sheets[name] = { headers, rows: dataRows };
+        const allRows = raw.map((r) => (r ?? []).map((c) => String(c ?? "")));
+        sheets[name] = { allRows, headerIndex: detectHeaderRow(allRows) };
       }
 
-      const parsed: ParsedWorkbook = {
-        fileName: file.name,
-        sheetNames: workbook.SheetNames,
-        sheets,
-      };
       setWizard({
         step: "map",
-        parsed,
+        parsed: { fileName: file.name, sheetNames: workbook.SheetNames, sheets },
         sheetName: workbook.SheetNames[0] ?? "",
       });
     } catch {
@@ -158,40 +157,67 @@ export function ImportPanel() {
   }
 
   if (wizard.step === "map") {
+    const sheet = wizard.parsed.sheets[wizard.sheetName];
     return (
       <MappingStep
+        key={`${wizard.sheetName}:${sheet.headerIndex}`}
         wizard={wizard}
         onCancel={reset}
         onChangeSheet={(sheetName) => setWizard({ ...wizard, sheetName })}
+        onChangeHeaderRow={(headerIndex) =>
+          setWizard({
+            ...wizard,
+            parsed: {
+              ...wizard.parsed,
+              sheets: {
+                ...wizard.parsed.sheets,
+                [wizard.sheetName]: { ...sheet, headerIndex },
+              },
+            },
+          })
+        }
         onContinue={async (mapping) => {
           setIsBusy(true);
-          const sheet = wizard.parsed.sheets[wizard.sheetName];
+          const headers = (sheet.allRows[sheet.headerIndex] ?? []).map((h) => h.trim());
+          const dataRows = sheet.allRows.slice(sheet.headerIndex + 1);
+
           const validRows: NormalizedRow[] = [];
           const invalidErrors: string[] = [];
+          const warnings: string[] = [];
 
-          sheet.rows.forEach((rowCells, i) => {
+          dataRows.forEach((rowCells, i) => {
             const mapped: MappedRow = {};
-            sheet.headers.forEach((_, colIndex) => {
+            // The whole original row travels with the record so the master is
+            // imported without losing the columns Phase 1 does not model.
+            const sourceRow: Record<string, string> = {};
+            headers.forEach((header, colIndex) => {
               const field = mapping[colIndex];
               if (field) mapped[field] = rowCells[colIndex];
+              if (header) sourceRow[header] = rowCells[colIndex] ?? "";
             });
-            const result = normalizeImportRow(mapped, i + 2);
+
+            const result = normalizeImportRow(
+              mapped,
+              sheet.headerIndex + 2 + i,
+              sourceRow
+            );
             if (result.ok) {
               validRows.push(result.row);
+              warnings.push(...result.warnings);
             } else {
               invalidErrors.push(...result.errors);
             }
           });
 
-          // Guard against duplicate stock numbers within the sheet itself —
-          // the last row for a given stock number wins, matching how a
-          // second pass over the same source would behave.
+          // Duplicate stock numbers within the sheet itself: last row wins,
+          // matching how re-running the same source would behave.
           const byStock = new Map<string, NormalizedRow>();
           for (const row of validRows) byStock.set(row.stock_number.toLowerCase(), row);
           const dedupedRows = [...byStock.values()];
 
-          const stockNumbers = dedupedRows.map((r) => r.stock_number);
-          const dupResult = await checkDuplicateStockNumbers(stockNumbers);
+          const dupResult = await checkDuplicateStockNumbers(
+            dedupedRows.map((r) => r.stock_number)
+          );
           setIsBusy(false);
 
           if (dupResult.error) {
@@ -211,6 +237,7 @@ export function ImportPanel() {
             sheetName: wizard.sheetName,
             validRows: dedupedRows,
             invalidErrors,
+            warnings,
             duplicates,
             decisions,
           });
@@ -238,41 +265,71 @@ export function ImportPanel() {
           })
         }
         onConfirm={async () => {
-          setWizard({ step: "importing" });
-          const result = await runImport({
-            fileName: wizard.parsed.fileName,
-            sheetName: wizard.sheetName,
-            totalRows: wizard.validRows.length + wizard.invalidErrors.length,
-            invalidCount: wizard.invalidErrors.length,
-            rows: wizard.validRows.map((row) => ({
-              row,
-              onDuplicate:
-                wizard.decisions[row.stock_number.toLowerCase()] ?? "skip",
-            })),
-          });
+          const rows = wizard.validRows.map((row) => ({
+            row,
+            onDuplicate:
+              wizard.decisions[row.stock_number.toLowerCase()] ?? ("skip" as const),
+          }));
 
-          if (result.error) {
-            toast.error(result.error);
-            setWizard({
-              step: "review",
-              parsed: wizard.parsed,
-              sheetName: wizard.sheetName,
-              validRows: wizard.validRows,
-              invalidErrors: wizard.invalidErrors,
-              duplicates: wizard.duplicates,
-              decisions: wizard.decisions,
-            });
+          setWizard({ step: "importing", done: 0, total: rows.length });
+
+          const started = await beginImport(
+            wizard.parsed.fileName,
+            wizard.sheetName
+          );
+          if (started.error || !started.batchId) {
+            toast.error(started.error ?? "Could not start the import.");
+            setWizard({ ...wizard });
             return;
           }
+
+          let imported = 0;
+          let updated = 0;
+          let skipped = 0;
+          let duplicates = 0;
+          const failures: string[] = [];
+
+          for (let i = 0; i < rows.length; i += IMPORT_CHUNK_SIZE) {
+            const chunk = rows.slice(i, i + IMPORT_CHUNK_SIZE);
+            const result = await importChunk(started.batchId, chunk);
+
+            if (result.error) {
+              toast.error(result.error);
+              setWizard({ ...wizard });
+              return;
+            }
+
+            imported += result.imported ?? 0;
+            updated += result.updated ?? 0;
+            skipped += result.skipped ?? 0;
+            duplicates += result.duplicates ?? 0;
+            if (result.failures?.length) failures.push(...result.failures);
+
+            setWizard({
+              step: "importing",
+              done: Math.min(i + IMPORT_CHUNK_SIZE, rows.length),
+              total: rows.length,
+            });
+          }
+
+          await finalizeImport(started.batchId, {
+            totalRows: wizard.validRows.length + wizard.invalidErrors.length,
+            imported,
+            updated,
+            skipped,
+            invalid: wizard.invalidErrors.length,
+            duplicates,
+          });
 
           toast.success("Import complete.");
           setWizard({
             step: "result",
-            imported: result.imported ?? 0,
-            updated: result.updated ?? 0,
-            skipped: result.skipped ?? 0,
-            invalid: result.invalid ?? 0,
-            duplicates: result.duplicates ?? 0,
+            imported,
+            updated,
+            skipped,
+            invalid: wizard.invalidErrors.length,
+            duplicates,
+            failures: failures.slice(0, 25),
           });
           router.refresh();
         }}
@@ -281,17 +338,22 @@ export function ImportPanel() {
   }
 
   if (wizard.step === "importing") {
+    const pct = wizard.total ? Math.round((wizard.done / wizard.total) * 100) : 0;
     return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border py-16">
+      <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border px-8 py-16">
         <Loader2 className="size-6 animate-spin text-primary" aria-hidden="true" />
-        <p className="text-sm text-muted-foreground">Importing your bikes…</p>
+        <p className="text-sm text-muted-foreground">
+          Importing {wizard.done.toLocaleString()} of{" "}
+          {wizard.total.toLocaleString()} bikes…
+        </p>
+        <Progress value={pct} className="h-1.5 w-full max-w-sm" />
       </div>
     );
   }
 
   // step === "result"
   return (
-    <div className="flex flex-col items-center gap-5 rounded-xl border border-border py-12 text-center">
+    <div className="flex flex-col items-center gap-5 rounded-xl border border-border px-6 py-12 text-center">
       <span className="flex size-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
         <CheckCircle2 className="size-6" aria-hidden="true" />
       </span>
@@ -314,6 +376,18 @@ export function ImportPanel() {
           </Badge>
         )}
       </div>
+      {wizard.failures.length > 0 && (
+        <div className="w-full max-w-xl text-left">
+          <p className="mb-1.5 text-sm font-medium text-destructive">
+            Rows the database rejected:
+          </p>
+          <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto text-xs text-muted-foreground">
+            {wizard.failures.map((f, i) => (
+              <li key={i}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <Button onClick={reset}>Import another file</Button>
     </div>
   );
@@ -323,26 +397,39 @@ function MappingStep({
   wizard,
   onCancel,
   onChangeSheet,
+  onChangeHeaderRow,
   onContinue,
   isBusy,
 }: {
   wizard: Extract<Wizard, { step: "map" }>;
   onCancel: () => void;
   onChangeSheet: (sheetName: string) => void;
+  onChangeHeaderRow: (index: number) => void;
   onContinue: (mapping: HeaderMapping) => void;
   isBusy: boolean;
 }) {
   const sheet = wizard.parsed.sheets[wizard.sheetName];
+  const headers = (sheet.allRows[sheet.headerIndex] ?? []).map((h) => h.trim());
+  const dataRowCount = Math.max(0, sheet.allRows.length - sheet.headerIndex - 1);
+
   const [mapping, setMapping] = useState<HeaderMapping>(() => {
     const initial: HeaderMapping = {};
-    sheet.headers.forEach((h, i) => {
-      initial[i] = guessField(h);
+    const claimed = new Set<ImportTargetField>();
+    headers.forEach((h, i) => {
+      const guess = guessTargetField(h);
+      // The master repeats generic headers ("Amount", "Paid") across its
+      // invoice blocks; only the first occurrence may claim a field.
+      if (guess && !claimed.has(guess)) {
+        initial[i] = guess;
+        claimed.add(guess);
+      }
     });
     return initial;
   });
 
   const usedFields = new Set(Object.values(mapping).filter(Boolean));
   const hasStockNumber = Object.values(mapping).includes("stock_number");
+  const mappedCount = usedFields.size;
 
   return (
     <div className="flex flex-col gap-5">
@@ -364,33 +451,70 @@ function MappingStep({
         </Button>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-foreground">
-          Select worksheet
-        </label>
-        <Select value={wizard.sheetName} onValueChange={onChangeSheet}>
-          <SelectTrigger className="w-full sm:w-72">
-            <SelectValue placeholder="Choose a worksheet" />
-          </SelectTrigger>
-          <SelectContent>
-            {wizard.parsed.sheetNames.map((name) => (
-              <SelectItem key={name} value={name}>
-                {name} ({wizard.parsed.sheets[name].rows.length} rows)
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-foreground">
+            Select worksheet
+          </label>
+          <Select value={wizard.sheetName} onValueChange={onChangeSheet}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Choose a worksheet" />
+            </SelectTrigger>
+            <SelectContent>
+              {wizard.parsed.sheetNames.map((name) => {
+                const s = wizard.parsed.sheets[name];
+                return (
+                  <SelectItem key={name} value={name}>
+                    {name} ({Math.max(0, s.allRows.length - s.headerIndex - 1)} rows)
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-foreground">Header row</label>
+          <Select
+            value={String(sheet.headerIndex)}
+            onValueChange={(v) => onChangeHeaderRow(Number(v))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sheet.allRows.slice(0, 10).map((row, i) => {
+                const preview = row
+                  .filter((c) => c.trim())
+                  .slice(0, 4)
+                  .join(", ")
+                  .slice(0, 48);
+                return (
+                  <SelectItem key={i} value={String(i)}>
+                    Row {i + 1}
+                    {preview ? ` — ${preview}` : " — (blank)"}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Detected automatically — change it if your sheet has a title banner
+            above the column names.
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between text-sm">
           <span className="font-medium text-foreground">Map columns to fields</span>
           <span className="text-muted-foreground">
-            {sheet.headers.length} columns · {sheet.rows.length} rows
+            {mappedCount} of {headers.filter(Boolean).length} mapped ·{" "}
+            {dataRowCount} rows
           </span>
         </div>
-        <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
-          {sheet.headers.map((header, i) => (
+        <div className="flex max-h-96 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border">
+          {headers.map((header, i) => (
             <div
               key={`${header}-${i}`}
               className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between"
@@ -427,6 +551,10 @@ function MappingStep({
             </div>
           ))}
         </div>
+        <p className="text-xs text-muted-foreground">
+          Unmapped columns are still stored with each bike, so nothing in your
+          master is lost.
+        </p>
         {!hasStockNumber && (
           <p className="flex items-center gap-2 text-sm text-destructive">
             <TriangleAlert className="size-4" aria-hidden="true" />
@@ -489,34 +617,85 @@ function ReviewStep({
         )}
         {wizard.invalidErrors.length > 0 && (
           <Badge className="bg-destructive/10 text-destructive">
-            {wizard.invalidErrors.length} invalid row
+            {wizard.invalidErrors.length} skipped row
             {wizard.invalidErrors.length === 1 ? "" : "s"}
+          </Badge>
+        )}
+        {wizard.warnings.length > 0 && (
+          <Badge className="bg-amber-500/10 text-amber-400">
+            {wizard.warnings.length} cell warning
+            {wizard.warnings.length === 1 ? "" : "s"}
           </Badge>
         )}
       </div>
 
       {wizard.invalidErrors.length > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
-          <p className="text-sm font-medium text-destructive">
-            These rows will be skipped:
-          </p>
-          <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
-            {wizard.invalidErrors.slice(0, 10).map((msg, i) => (
+        <details className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium text-destructive">
+            {wizard.invalidErrors.length} row
+            {wizard.invalidErrors.length === 1 ? "" : "s"} will be skipped
+          </summary>
+          <ul className="mt-2 flex max-h-40 flex-col gap-1 overflow-y-auto text-sm text-muted-foreground">
+            {wizard.invalidErrors.slice(0, 50).map((msg, i) => (
               <li key={i}>{msg}</li>
             ))}
-            {wizard.invalidErrors.length > 10 && (
-              <li>…and {wizard.invalidErrors.length - 10} more.</li>
+            {wizard.invalidErrors.length > 50 && (
+              <li>…and {wizard.invalidErrors.length - 50} more.</li>
             )}
           </ul>
-        </div>
+        </details>
+      )}
+
+      {wizard.warnings.length > 0 && (
+        <details className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium text-amber-400">
+            {wizard.warnings.length} cell
+            {wizard.warnings.length === 1 ? "" : "s"} could not be read — the row
+            still imports, that field is left blank
+          </summary>
+          <ul className="mt-2 flex max-h-40 flex-col gap-1 overflow-y-auto text-sm text-muted-foreground">
+            {wizard.warnings.slice(0, 50).map((msg, i) => (
+              <li key={i}>{msg}</li>
+            ))}
+            {wizard.warnings.length > 50 && (
+              <li>…and {wizard.warnings.length - 50} more.</li>
+            )}
+          </ul>
+        </details>
       )}
 
       {duplicateRows.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-foreground">
-            These stock numbers already exist. Choose what to do with each —
-            nothing is overwritten unless you say so.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-foreground">
+              These stock numbers already exist. Nothing is overwritten unless
+              you say so.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  duplicateRows.forEach((r) =>
+                    onDecisionChange(r.stock_number.toLowerCase(), "skip")
+                  )
+                }
+              >
+                Skip all
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  duplicateRows.forEach((r) =>
+                    onDecisionChange(r.stock_number.toLowerCase(), "overwrite")
+                  )
+                }
+              >
+                Overwrite all
+              </Button>
+            </div>
+          </div>
           <div className="max-h-72 overflow-y-auto rounded-lg border border-border">
             <Table>
               <TableHeader>
@@ -527,7 +706,7 @@ function ReviewStep({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {duplicateRows.map((row) => {
+                {duplicateRows.slice(0, 200).map((row) => {
                   const key = row.stock_number.toLowerCase();
                   return (
                     <TableRow key={key}>
@@ -559,12 +738,19 @@ function ReviewStep({
               </TableBody>
             </Table>
           </div>
+          {duplicateRows.length > 200 && (
+            <p className="text-xs text-muted-foreground">
+              Showing the first 200. Use Skip all / Overwrite all to decide the
+              rest.
+            </p>
+          )}
         </div>
       )}
 
       {wizard.validRows.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-          No valid rows to import. Go back and check your column mapping.
+          No valid rows to import. Go back and check your header row and column
+          mapping.
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">

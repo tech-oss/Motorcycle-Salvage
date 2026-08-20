@@ -43,6 +43,9 @@ yarn-error.log*
 # local dev-server tooling config
 /.claude/
 
+# local scratch space — may hold real client data, never commit
+/.scratch/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

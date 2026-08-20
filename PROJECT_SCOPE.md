@@ -2,8 +2,8 @@
 
 > This document is the permanent source of truth for what this product is, who it is for, and what Phase 1 does and does not include. Every future development session should read this file first. If a request conflicts with this document, flag the conflict before building — do not silently expand scope.
 
-Status: Phase 1 — Supabase connected; UI reads live data. Write/edit forms, uploads and Excel import still to build.
-Last updated: 2026-08-19.
+Status: Phase 1 — Supabase connected. Bike create/edit, document & photo uploads, Excel import (write path), Excel master export and upliftment instruction PDFs are all built. Verified against the client's real master workbook (2026-08-21).
+Last updated: 2026-08-21.
 
 ---
 
@@ -43,6 +43,7 @@ The client asked for a **basic first version**. Do not over-build. Manual data e
 - QR code per bike, linking to its protected record
 - Authentication with role-based access (Admin / Staff / Viewer)
 - Historical Excel data import
+- Excel master export (added 2026-08-21 at client request — see §19.2)
 - Dashboard, reporting, and the standard CRUD sections listed below
 
 ### Explicitly OUT of scope for Phase 1 — do not build
@@ -59,6 +60,20 @@ The client asked for a **basic first version**. Do not over-build. Manual data e
 - Native mobile applications
 
 **The architecture should stay flexible enough to add these later (see [ARCHITECTURE.md](ARCHITECTURE.md#14-future-extensibility)), but no code, UI, or schema work should be spent implementing them now.** If a task description implies one of these, stop and confirm scope before proceeding.
+
+#### Open scope conflict — upliftment report auto-population (raised 2026-08-21)
+
+The client asked:
+
+> "Only documents that are not here is the actual upliftment report we get. But
+> maybe there is a way that once we get that you can upload it and system will
+> gather all info"
+
+Reading a received upliftment report and populating fields from it is **OCR /
+automatic PDF data extraction**, which is explicitly out of scope above. Today
+the report can be uploaded and stored against the bike like any other document;
+the fields are typed in. Auto-extraction needs a Phase 2 decision, not a silent
+scope expansion.
 
 ## 5. Core Business Workflow
 
@@ -238,6 +253,43 @@ Rules:
 - **Never silently overwrite existing data.** Conflicts must be surfaced to the user for a decision.
 - Results must clearly report: imported, updated, skipped, invalid, duplicates.
 - Provide a downloadable import template.
+
+### 19.1 The client's real master workbook (verified 2026-08-21)
+
+The client supplied `08 MSSA Master Aug 2026.xlsx`. What it actually contains,
+and what the importer had to be built to handle:
+
+- **Two worksheets with different column sets**: `Bryte & Hollard` (121 columns,
+  1,479 rows) and `Alpha` (102 columns, 285 rows, "IUM" naming). Import one
+  sheet at a time; mapping is per sheet.
+- **The header row is not row 1.** A title banner ("MSSA SALVAGE MASTER") sits
+  above it. The importer auto-detects the header row and lets the user override.
+- **Accounting formatting**: money arrives as `" 56,521.74 "`, `" -   "` (blank),
+  `"51%"`, `"R29,900.00"`, `"(1,234.00)"` (negative).
+- **Date formats**: `15-Nov-18`, `Nov-18` (month only), `7/3/2019` (D/M/Y),
+  `15 July 2026`, `Monday, August 03, 2026`.
+- **Header typos are real data**: the Alpha sheet's stock column is literally
+  headed `Stock Nosuzu`.
+- **210 + 37 rows have no stock number** — blank spacer rows, correctly skipped.
+- Importable total: **1,517 bikes** (1,269 + 248).
+
+Because ~90 of those columns are an invoice/receipt ledger that Phase 1 does not
+model, every imported bike stores its **entire original row** in
+`salvage_bikes.source_row` (jsonb). The historical import is therefore lossless
+today, and those columns can be promoted to real fields later without
+re-importing.
+
+Insurance companies in scope: **Hollard, Bryte, Alpha**. Brokerages appear in the
+Insurance Company / Broker columns and are created on import as encountered.
+
+### 19.2 Excel master export (client requirement)
+
+> "The program needs to export to an Excel anyway... We must keep a master."
+
+`GET /api/exports/master` builds an .xlsx using the client's own column names and
+tab structure (`Bryte & Hollard`, `Alpha`, `Other`). Verified round-trip: exporting
+1,269 imported bikes and re-importing the result reproduces every field
+identically. Restricted to admin and staff; never cached.
 
 ## 20. Design System
 

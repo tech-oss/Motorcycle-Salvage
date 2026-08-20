@@ -227,9 +227,49 @@ async function runChecks(db) {
 
   await expect(
     db,
-    "7 workflow statuses seeded",
+    "workflow statuses seeded (7 from 001 + 3 from the client's master)",
     `select count(*)::int as n from public.bike_statuses`,
-    (rows) => rows[0].n === 7
+    (rows) => rows[0].n === 10
+  );
+
+  // The import maps the master's own status words onto these codes; a missing
+  // one would make imported bikes fail their FK to bike_statuses.
+  await expect(
+    db,
+    "master workflow statuses present (sold / not_sold / no_salvage)",
+    `select code from public.bike_statuses
+      where code in ('sold', 'not_sold', 'no_salvage')`,
+    (rows) => rows.length === 3
+  );
+
+  // Every column the client's master workbook needs a home for.
+  const masterColumns = [
+    "engine_capacity_cc", "claims_handler", "salvage_clerk", "arrival_date",
+    "sold_to", "selling_amount", "insurance_invoice_no", "insurance_amount",
+    "source_row", "import_batch_id",
+  ];
+  await expect(
+    db,
+    "salvage_bikes carries the master-import columns",
+    `select column_name from information_schema.columns
+      where table_schema = 'public' and table_name = 'salvage_bikes'`,
+    (rows) => {
+      const names = rows.map((r) => r.column_name);
+      const missing = masterColumns.filter((c) => !names.includes(c));
+      if (missing.length) console.log("   missing:", missing.join(", "));
+      return missing.length === 0;
+    }
+  );
+
+  // source_row is what makes the historical import lossless — if it is not
+  // jsonb, the unmapped ~90 ledger columns have nowhere to go.
+  await expect(
+    db,
+    "source_row is jsonb (lossless historical import)",
+    `select data_type from information_schema.columns
+      where table_schema = 'public' and table_name = 'salvage_bikes'
+        and column_name = 'source_row'`,
+    (rows) => rows[0]?.data_type === "jsonb"
   );
 
   await expect(

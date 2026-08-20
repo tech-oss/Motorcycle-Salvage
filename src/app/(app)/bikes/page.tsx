@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { BikesTable } from "@/components/salvage/bikes-table";
+import { ExportMasterButton } from "@/components/imports/export-master-button";
 import { getBikes } from "@/services/bikes";
 import { getCurrentProfile, canWrite } from "@/lib/supabase/auth";
 
@@ -20,12 +21,15 @@ export default async function BikesPage() {
           </p>
         </div>
         {editable && (
-          <Button asChild className="gap-2">
-            <Link href="/bikes/new">
-              <Plus className="size-4" aria-hidden="true" />
-              New Instruction
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <ExportMasterButton />
+            <Button asChild className="gap-2">
+              <Link href="/bikes/new">
+                <Plus className="size-4" aria-hidden="true" />
+                New Instruction
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
 

@@ -41,49 +41,126 @@ export type ImportRowInput = {
   onDuplicate: "skip" | "overwrite";
 };
 
-export type RunImportInput = {
-  fileName: string;
-  sheetName: string;
-  totalRows: number;
-  invalidCount: number;
-  rows: ImportRowInput[];
-};
-
-export type ImportResult = {
-  error?: string;
-  imported?: number;
-  updated?: number;
-  skipped?: number;
-  invalid?: number;
-  duplicates?: number;
-};
+export type BeginImportResult = { error?: string; batchId?: string };
 
 /**
- * Final "Confirm -> Import" step. Never silently overwrites: a row only
- * updates an existing bike when the caller explicitly marked it "overwrite"
- * during the duplicate-review step.
+ * Opens an import run.
+ *
+ * The client's master is ~1,500 rows wide by ~120 columns; sending that in a
+ * single Server Action call exceeds the request body limit, so the import is
+ * split into a begin / chunk / finalize lifecycle. The batch row also gives
+ * every imported bike a traceable origin via salvage_bikes.import_batch_id.
  */
-export async function runImport(input: RunImportInput): Promise<ImportResult> {
+export async function beginImport(
+  fileName: string,
+  sheetName: string
+): Promise<BeginImportResult> {
   const profile = await getCurrentProfile();
   if (!isAdmin(profile)) {
     return { error: "You do not have permission to import data." };
   }
 
-  if (input.rows.length === 0) {
-    return { error: "There is nothing to import." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("import_batches")
+    .insert({ file_name: fileName, sheet_name: sheetName })
+    .select("id")
+    .single();
+
+  if (error) return { error: `Could not start the import: ${error.message}` };
+  return { batchId: data.id };
+}
+
+export type ChunkResult = {
+  error?: string;
+  imported?: number;
+  updated?: number;
+  skipped?: number;
+  duplicates?: number;
+  /** Per-row failures, so a partial import can still be explained. */
+  failures?: string[];
+};
+
+const CHUNK_DB_PAGE = 200;
+
+function buildPayload(
+  row: NormalizedRow,
+  insurerId: string | null,
+  batchId: string
+) {
+  return {
+    stock_number: row.stock_number,
+    file_number: row.file_number,
+    claim_number: row.claim_number,
+    // A null status would violate the NOT NULL default, so unmapped rows keep
+    // the schema default instead of being forced to a guess.
+    ...(row.status ? { status: row.status } : {}),
+    insurance_company_id: insurerId,
+    broker: row.broker,
+    assessor: row.assessor,
+    claims_handler: row.claims_handler,
+    salvage_clerk: row.salvage_clerk,
+    insured_name: row.insured_name,
+    insured_phone: row.insured_phone,
+    insured_email: row.insured_email,
+    make: row.make,
+    model: row.model,
+    engine_capacity_cc: row.engine_capacity_cc,
+    year: row.year,
+    registration_number: row.registration_number,
+    vin_number: row.vin_number,
+    engine_number: row.engine_number,
+    odometer: row.odometer,
+    colour: row.colour,
+    keys_status: row.keys_status,
+    write_off_code: row.write_off_code,
+    loss_date: row.loss_date,
+    collection_location: row.collection_location,
+    current_location: row.current_location,
+    arrival_date: row.arrival_date,
+    date_received: row.date_received,
+    retail_value: row.retail_value,
+    salvage_value: row.salvage_value,
+    salvage_percentage: row.salvage_percentage,
+    mssa_commission: row.mssa_commission,
+    release_fee: row.release_fee,
+    release_payment_date: row.release_payment_date,
+    estimator_cost: row.estimator_cost,
+    sold_to: row.sold_to,
+    selling_amount: row.selling_amount,
+    insurance_invoice_no: row.insurance_invoice_no,
+    insurance_amount: row.insurance_amount,
+    notes: row.notes,
+    source_row: row.source_row,
+    import_batch_id: batchId,
+  };
+}
+
+/**
+ * Imports one chunk of rows. Inserts and updates are issued as bulk pages
+ * rather than row-by-row — 1,500 individual round trips would time out long
+ * before the import finished.
+ */
+export async function importChunk(
+  batchId: string,
+  rows: ImportRowInput[]
+): Promise<ChunkResult> {
+  const profile = await getCurrentProfile();
+  if (!isAdmin(profile)) {
+    return { error: "You do not have permission to import data." };
+  }
+  if (rows.length === 0) {
+    return { imported: 0, updated: 0, skipped: 0, duplicates: 0, failures: [] };
   }
 
   const supabase = await createClient();
 
-  // Resolve insurance company names to ids, creating any that don't exist —
-  // historical spreadsheets name insurers freely, and refusing the whole row
-  // over an unrecognized insurer name would defeat the point of a migration
-  // tool.
+  // Resolve insurance company names to ids, creating any that don't exist.
+  // Historical spreadsheets name insurers and brokerages freely, and refusing
+  // a row over an unrecognised insurer would defeat the point of a migration.
   const insurerNames = [
     ...new Set(
-      input.rows
-        .map((r) => r.row.insurance_company)
-        .filter((n): n is string => !!n)
+      rows.map((r) => r.row.insurance_company).filter((n): n is string => !!n)
     ),
   ];
   const insurerIdByName = new Map<string, string>();
@@ -94,12 +171,9 @@ export async function runImport(input: RunImportInput): Promise<ImportResult> {
     if (existingErr) {
       return { error: `Could not load insurance companies: ${existingErr.message}` };
     }
-    for (const row of existing ?? []) {
-      insurerIdByName.set(row.name.toLowerCase(), row.id);
-    }
-    const missing = insurerNames.filter(
-      (n) => !insurerIdByName.has(n.toLowerCase())
-    );
+    for (const r of existing ?? []) insurerIdByName.set(r.name.toLowerCase(), r.id);
+
+    const missing = insurerNames.filter((n) => !insurerIdByName.has(n.toLowerCase()));
     if (missing.length > 0) {
       const { data: created, error: createErr } = await supabase
         .from("insurance_companies")
@@ -108,60 +182,31 @@ export async function runImport(input: RunImportInput): Promise<ImportResult> {
       if (createErr) {
         return { error: `Could not create insurance companies: ${createErr.message}` };
       }
-      for (const row of created ?? []) {
-        insurerIdByName.set(row.name.toLowerCase(), row.id);
-      }
+      for (const r of created ?? []) insurerIdByName.set(r.name.toLowerCase(), r.id);
     }
   }
 
-  // Resolve which stock numbers already exist, to tell inserts from updates.
   const { data: existingBikes, error: existingBikesErr } = await supabase
     .from("salvage_bikes")
     .select("id, stock_number");
   if (existingBikesErr) {
     return { error: `Could not check existing bikes: ${existingBikesErr.message}` };
   }
-  const existingByStockLower = new Map(
+  const existingByStock = new Map(
     (existingBikes ?? []).map((b) => [b.stock_number.toLowerCase(), b.id])
   );
 
-  let imported = 0;
-  let updated = 0;
+  const toInsert: ReturnType<typeof buildPayload>[] = [];
+  const toUpdate: (ReturnType<typeof buildPayload> & { id: string })[] = [];
   let skipped = 0;
   let duplicates = 0;
 
-  for (const { row, onDuplicate } of input.rows) {
-    const existingId = existingByStockLower.get(row.stock_number.toLowerCase());
-
-    const payload = {
-      stock_number: row.stock_number,
-      file_number: row.file_number,
-      claim_number: row.claim_number,
-      insurance_company_id: row.insurance_company
-        ? (insurerIdByName.get(row.insurance_company.toLowerCase()) ?? null)
-        : null,
-      broker: row.broker,
-      assessor: row.assessor,
-      insured_name: row.insured_name,
-      insured_phone: row.insured_phone,
-      insured_email: row.insured_email,
-      make: row.make,
-      model: row.model,
-      year: row.year,
-      registration_number: row.registration_number,
-      vin_number: row.vin_number,
-      odometer: row.odometer,
-      colour: row.colour,
-      engine_number: row.engine_number,
-      write_off_code: row.write_off_code,
-      loss_date: row.loss_date,
-      retail_value: row.retail_value,
-      salvage_value: row.salvage_value,
-      collection_location: row.collection_location,
-      current_location: row.current_location,
-      date_received: row.date_received,
-      notes: row.notes,
-    };
+  for (const { row, onDuplicate } of rows) {
+    const insurerId = row.insurance_company
+      ? (insurerIdByName.get(row.insurance_company.toLowerCase()) ?? null)
+      : null;
+    const payload = buildPayload(row, insurerId, batchId);
+    const existingId = existingByStock.get(row.stock_number.toLowerCase());
 
     if (existingId) {
       duplicates++;
@@ -169,49 +214,98 @@ export async function runImport(input: RunImportInput): Promise<ImportResult> {
         skipped++;
         continue;
       }
-      const { error } = await supabase
-        .from("salvage_bikes")
-        .update(payload)
-        .eq("id", existingId);
-      if (error) {
-        skipped++;
-        continue;
-      }
-      updated++;
+      toUpdate.push({ ...payload, id: existingId });
     } else {
-      const { error } = await supabase.from("salvage_bikes").insert(payload);
-      if (error) {
-        skipped++;
-        continue;
-      }
-      imported++;
-      existingByStockLower.set(row.stock_number.toLowerCase(), "pending");
+      toInsert.push(payload);
     }
   }
 
-  const { error: batchError } = await supabase.from("import_batches").insert({
-    file_name: input.fileName,
-    sheet_name: input.sheetName,
-    total_rows: input.totalRows,
-    imported_count: imported,
-    updated_count: updated,
-    skipped_count: skipped,
-    invalid_count: input.invalidCount,
-    duplicate_count: duplicates,
-  });
-  if (batchError) {
-    console.error("[imports] could not record import batch:", batchError.message);
+  const failures: string[] = [];
+  let imported = 0;
+  let updated = 0;
+
+  for (let i = 0; i < toInsert.length; i += CHUNK_DB_PAGE) {
+    const page = toInsert.slice(i, i + CHUNK_DB_PAGE);
+    const { error } = await supabase.from("salvage_bikes").insert(page);
+    if (error) {
+      // One bad row fails the whole page, so retry the page individually to
+      // save the good rows and name the row that actually broke.
+      for (const one of page) {
+        const { error: rowError } = await supabase.from("salvage_bikes").insert(one);
+        if (rowError) {
+          skipped++;
+          failures.push(`${one.stock_number}: ${rowError.message}`);
+        } else imported++;
+      }
+    } else {
+      imported += page.length;
+    }
+  }
+
+  for (let i = 0; i < toUpdate.length; i += CHUNK_DB_PAGE) {
+    const page = toUpdate.slice(i, i + CHUNK_DB_PAGE);
+    const { error } = await supabase.from("salvage_bikes").upsert(page);
+    if (error) {
+      for (const one of page) {
+        const { error: rowError } = await supabase.from("salvage_bikes").upsert(one);
+        if (rowError) {
+          skipped++;
+          failures.push(`${one.stock_number}: ${rowError.message}`);
+        } else updated++;
+      }
+    } else {
+      updated += page.length;
+    }
+  }
+
+  return { imported, updated, skipped, duplicates, failures: failures.slice(0, 25) };
+}
+
+export type ImportResult = {
+  error?: string;
+  imported?: number;
+  updated?: number;
+  skipped?: number;
+  invalid?: number;
+  duplicates?: number;
+};
+
+/** Writes the final tallies onto the batch and refreshes affected pages. */
+export async function finalizeImport(
+  batchId: string,
+  totals: {
+    totalRows: number;
+    imported: number;
+    updated: number;
+    skipped: number;
+    invalid: number;
+    duplicates: number;
+  }
+): Promise<{ error?: string }> {
+  const profile = await getCurrentProfile();
+  if (!isAdmin(profile)) {
+    return { error: "You do not have permission to import data." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("import_batches")
+    .update({
+      total_rows: totals.totalRows,
+      imported_count: totals.imported,
+      updated_count: totals.updated,
+      skipped_count: totals.skipped,
+      invalid_count: totals.invalid,
+      duplicate_count: totals.duplicates,
+    })
+    .eq("id", batchId);
+
+  if (error) {
+    console.error("[imports] could not finalize batch:", error.message);
   }
 
   revalidatePath("/bikes");
   revalidatePath("/dashboard");
   revalidatePath("/imports");
-
-  return {
-    imported,
-    updated,
-    skipped,
-    invalid: input.invalidCount,
-    duplicates,
-  };
+  return {};
 }
