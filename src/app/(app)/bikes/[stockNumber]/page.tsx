@@ -11,7 +11,7 @@ import { PhotosGrid } from "@/components/photos/photos-grid";
 import { PhotoUploadDialog } from "@/components/photos/photo-upload-dialog";
 import { BikeUpliftmentPanel } from "@/components/upliftments/bike-upliftment-panel";
 import { getBikeByStockNumber } from "@/services/bikes";
-import { signPhotoUrls } from "@/services/storage";
+import { signPhotoUrls, signDocumentUrls } from "@/services/storage";
 import { getCurrentProfile, canWrite } from "@/lib/supabase/auth";
 
 export default async function BikeDetailPage({
@@ -32,6 +32,11 @@ export default async function BikeDetailPage({
   const photoUrls = await signPhotoUrls(bike.photos.map((p) => p.storagePath));
   const coverPhoto = bike.photos[0];
   const coverUrl = coverPhoto ? photoUrls[coverPhoto.storagePath] : undefined;
+
+  const instructionPaths = bike.upliftments
+    .map((u) => u.documentPath)
+    .filter((p): p is string => !!p);
+  const instructionUrls = await signDocumentUrls(instructionPaths);
 
   return (
     <div className="flex flex-col gap-6">
@@ -108,7 +113,7 @@ export default async function BikeDetailPage({
           </TabsContent>
 
           <TabsContent value="upliftment" className="mt-4">
-            <BikeUpliftmentPanel bike={bike} />
+            <BikeUpliftmentPanel bike={bike} instructionUrls={instructionUrls} />
           </TabsContent>
 
           <TabsContent value="notes" className="mt-4">

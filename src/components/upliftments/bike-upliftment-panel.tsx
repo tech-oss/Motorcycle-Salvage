@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Printer, ClipboardList } from "lucide-react";
+import { Printer, ClipboardList, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,14 @@ function Row({ label, value }: { label: string; value: string }) {
 
 const dash = (v: string | null | undefined) => (v?.trim() ? v : "—");
 
-export function BikeUpliftmentPanel({ bike }: { bike: Bike }) {
+export function BikeUpliftmentPanel({
+  bike,
+  instructionUrls = {},
+}: {
+  bike: Bike;
+  /** storagePath -> signed URL, for downloading past generated PDFs. */
+  instructionUrls?: Record<string, string>;
+}) {
   const hasCurrent =
     bike.transporter ||
     bike.upliftmentDate ||
@@ -75,24 +82,42 @@ export function BikeUpliftmentPanel({ bike }: { bike: Bike }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 px-5">
-            {bike.upliftments.map((u) => (
-              <div
-                key={u.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-4 py-3 text-sm"
-              >
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">
-                    {UPLIFTMENT_STATUS_LABELS[u.status]}
-                  </Badge>
-                  <span className="text-foreground">
-                    {dash(u.transporterName)}
-                  </span>
+            {bike.upliftments.map((u) => {
+              const downloadUrl = u.documentPath
+                ? instructionUrls[u.documentPath]
+                : undefined;
+              return (
+                <div
+                  key={u.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-4 py-3 text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      {UPLIFTMENT_STATUS_LABELS[u.status]}
+                    </Badge>
+                    <span className="text-foreground">
+                      {dash(u.transporterName)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-muted-foreground">
+                      {formatDate(u.upliftmentDate)}
+                    </span>
+                    {downloadUrl && (
+                      <a
+                        href={downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-primary hover:underline"
+                      >
+                        <Download className="size-3.5" aria-hidden="true" />
+                        PDF
+                      </a>
+                    )}
+                  </div>
                 </div>
-                <span className="text-muted-foreground">
-                  {formatDate(u.upliftmentDate)}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}

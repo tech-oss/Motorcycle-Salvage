@@ -85,7 +85,7 @@ export async function getBikeByStockNumber(
        communications(id, communication_type, occurred_at, from_party, to_party, subject, note, created_by),
        upliftments(id, status, contact_person, contact_number, upliftment_date,
                    sent_date, received_date, pickup_address, delivery_address, notes,
-                   transporters(name))`
+                   document_path, created_at, transporters(name))`
     )
     // Stock numbers are printed on stickers and typed by hand, so match
     // case-insensitively rather than failing on "m01187".
@@ -142,8 +142,12 @@ export async function getBikeByStockNumber(
       b.occurredAt.localeCompare(a.occurredAt)
     );
 
-  const upliftments: BikeUpliftment[] = (row.upliftments ?? []).map(
-    (u: Record<string, any>) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+  const upliftments: BikeUpliftment[] = (row.upliftments ?? [])
+    .slice()
+    .sort((a: Record<string, any>, b: Record<string, any>) => // eslint-disable-line @typescript-eslint/no-explicit-any
+      String(b.created_at).localeCompare(String(a.created_at))
+    )
+    .map((u: Record<string, any>) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
       id: u.id,
       status: u.status,
       transporterName: u.transporters?.name ?? null,
@@ -155,8 +159,8 @@ export async function getBikeByStockNumber(
       pickupAddress: u.pickup_address,
       deliveryAddress: u.delivery_address,
       notes: u.notes,
-    })
-  );
+      documentPath: u.document_path,
+    }));
 
   return {
     id: row.id,

@@ -57,6 +57,8 @@ export interface BikeUpliftment {
   pickupAddress: string | null;
   deliveryAddress: string | null;
   notes: string | null;
+  /** Storage path of the generated instruction PDF, if one exists. */
+  documentPath: string | null;
 }
 
 /** Row shape for list views — only what the table renders. */
