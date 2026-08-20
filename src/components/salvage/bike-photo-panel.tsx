@@ -3,7 +3,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatDate, describeBike } from "@/lib/utils";
 import type { Bike } from "@/types/bike";
 
-export function BikePhotoPanel({ bike }: { bike: Bike }) {
+export function BikePhotoPanel({
+  bike,
+  coverUrl,
+}: {
+  bike: Bike;
+  /** Signed URL for the first photo, if the bike has one. */
+  coverUrl?: string;
+}) {
   const facts: Array<[string, string]> = [
     ["Claim Number", bike.claimNumber ?? "—"],
     ["Insurance Company", bike.insuranceCompany ?? "—"],
@@ -19,11 +26,22 @@ export function BikePhotoPanel({ bike }: { bike: Bike }) {
   return (
     <Card className="gap-4 py-5">
       <CardContent className="flex flex-col gap-4 px-5">
-        {/* Photos live in a private bucket, so a thumbnail needs a signed URL.
-            Until upload is wired up this stays a placeholder rather than a
-            broken <img>. */}
-        <div className="flex aspect-[4/3] w-full items-center justify-center rounded-lg border border-border bg-gradient-to-br from-secondary to-muted">
-          <BikeIcon className="size-14 text-muted-foreground/40" aria-hidden="true" />
+        <div className="flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-gradient-to-br from-secondary to-muted">
+          {coverUrl ? (
+            /* Signed URLs expire; Next's optimizer would cache one that later
+               403s, so this stays a plain img. */
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={coverUrl}
+              alt={`${describeBike({ make: bike.make, model: bike.model })} photo`}
+              className="size-full object-cover"
+            />
+          ) : (
+            <BikeIcon
+              className="size-14 text-muted-foreground/40"
+              aria-hidden="true"
+            />
+          )}
         </div>
         <div>
           <h3 className="text-lg font-semibold text-foreground">

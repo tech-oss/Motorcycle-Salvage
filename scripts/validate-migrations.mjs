@@ -72,6 +72,10 @@ const SUPABASE_SHIM = `
     id text primary key,
     name text not null,
     public boolean not null default false,
+    -- Supabase's real bucket table carries these; 005 sets them, so the shim
+    -- must have them or the migration passes here and fails in production.
+    file_size_limit bigint,
+    allowed_mime_types text[],
     created_at timestamptz not null default now()
   );
 
@@ -236,6 +240,16 @@ async function runChecks(db) {
       rows.length === 2 &&
       rows.every((r) => r.public === false) &&
       rows.map((r) => r.id).join(",") === "documents,photos"
+  );
+
+  await expect(
+    db,
+    "buckets carry size and MIME limits (uploads bypass the server)",
+    `select id, file_size_limit, array_length(allowed_mime_types, 1) as mime_count
+       from storage.buckets order by id`,
+    (rows) =>
+      rows.length === 2 &&
+      rows.every((r) => r.file_size_limit > 0 && r.mime_count > 0)
   );
 
   const policyCount = await db.query(

@@ -1,6 +1,4 @@
 import { notFound } from "next/navigation";
-import { Upload } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BikeHeader } from "@/components/salvage/bike-header";
@@ -8,11 +6,13 @@ import { BikePhotoPanel } from "@/components/salvage/bike-photo-panel";
 import { BikeOverview } from "@/components/salvage/bike-overview";
 import { NotesTimeline } from "@/components/salvage/notes-timeline";
 import { DocumentsList } from "@/components/documents/documents-list";
+import { DocumentUploadDialog } from "@/components/documents/document-upload-dialog";
 import { PhotosGrid } from "@/components/photos/photos-grid";
+import { PhotoUploadDialog } from "@/components/photos/photo-upload-dialog";
 import { BikeUpliftmentPanel } from "@/components/upliftments/bike-upliftment-panel";
 import { getBikeByStockNumber } from "@/services/bikes";
-import { canWrite } from "@/lib/supabase/auth";
-import { getCurrentProfile } from "@/lib/supabase/auth";
+import { signPhotoUrls } from "@/services/storage";
+import { getCurrentProfile, canWrite } from "@/lib/supabase/auth";
 
 export default async function BikeDetailPage({
   params,
@@ -27,12 +27,18 @@ export default async function BikeDetailPage({
 
   const editable = canWrite(profile);
 
+  // The photos bucket is private, so thumbnails need URLs signed under this
+  // user's session — one batched call rather than one per photo.
+  const photoUrls = await signPhotoUrls(bike.photos.map((p) => p.storagePath));
+  const coverPhoto = bike.photos[0];
+  const coverUrl = coverPhoto ? photoUrls[coverPhoto.storagePath] : undefined;
+
   return (
     <div className="flex flex-col gap-6">
       <BikeHeader bike={bike} editable={editable} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-        <BikePhotoPanel bike={bike} />
+        <BikePhotoPanel bike={bike} coverUrl={coverUrl} />
 
         <Tabs defaultValue="overview" className="min-w-0">
           <TabsList className="w-full justify-start overflow-x-auto">
@@ -62,13 +68,17 @@ export default async function BikeDetailPage({
                     {bike.documents.length === 1 ? "" : "s"}
                   </p>
                   {editable && (
-                    <Button size="sm" className="gap-2">
-                      <Upload className="size-4" aria-hidden="true" />
-                      Upload Files
-                    </Button>
+                    <DocumentUploadDialog
+                      bikeId={bike.id}
+                      stockNumber={bike.stockNumber}
+                    />
                   )}
                 </div>
-                <DocumentsList documents={bike.documents} editable={editable} />
+                <DocumentsList
+                  documents={bike.documents}
+                  stockNumber={bike.stockNumber}
+                  editable={editable}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -81,13 +91,18 @@ export default async function BikeDetailPage({
                     Photos ({bike.photos.length})
                   </p>
                   {editable && (
-                    <Button size="sm" className="gap-2">
-                      <Upload className="size-4" aria-hidden="true" />
-                      Upload Files
-                    </Button>
+                    <PhotoUploadDialog
+                      bikeId={bike.id}
+                      stockNumber={bike.stockNumber}
+                    />
                   )}
                 </div>
-                <PhotosGrid photos={bike.photos} editable={editable} />
+                <PhotosGrid
+                  photos={bike.photos}
+                  signedUrls={photoUrls}
+                  stockNumber={bike.stockNumber}
+                  editable={editable}
+                />
               </CardContent>
             </Card>
           </TabsContent>
