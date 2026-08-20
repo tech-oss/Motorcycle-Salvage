@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import type {
   Bike,
   BikeCommunication,
@@ -54,19 +55,32 @@ export async function getBikes({
 }: { includeArchived?: boolean; limit?: number } = {}): Promise<BikeListItem[]> {
   const supabase = await createClient();
 
-  let query = supabase
-    .from("salvage_bikes")
-    .select(LIST_COLUMNS)
-    .order("date_received", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+  const build = () => {
+    let query = supabase
+      .from("salvage_bikes")
+      .select(LIST_COLUMNS)
+      .order("date_received", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+    if (!includeArchived) query = query.eq("archived", false);
+    return query;
+  };
 
-  if (!includeArchived) query = query.eq("archived", false);
-  if (limit) query = query.limit(limit);
+  // A caller asking for the first N rows does not need paging.
+  if (limit) {
+    const { data, error } = await build().limit(limit);
+    if (error) throw new Error(`Failed to load bikes: ${error.message}`);
+    return (data as unknown as ListRow[]).map(toListItem);
+  }
 
-  const { data, error } = await query;
-  if (error) throw new Error(`Failed to load bikes: ${error.message}`);
-
-  return (data as unknown as ListRow[]).map(toListItem);
+  // Otherwise page: an unbounded select stops at PostgREST's 1,000-row cap,
+  // which hid 500+ of the client's imported bikes from the list.
+  const rows = await fetchAllRows<ListRow>((from, to) =>
+    build().range(from, to) as unknown as PromiseLike<{
+      data: ListRow[] | null;
+      error: { message: string } | null;
+    }>
+  );
+  return rows.map(toListItem);
 }
 
 export async function getBikeByStockNumber(
@@ -267,10 +281,8 @@ export async function getBikeForEdit(stockNumber: string): Promise<{
 /** Stock numbers only — used to build QR/detail routes. */
 export async function getBikeStockNumbers(): Promise<string[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("salvage_bikes")
-    .select("stock_number");
-
-  if (error) throw new Error(`Failed to load stock numbers: ${error.message}`);
-  return (data ?? []).map((r) => r.stock_number);
+  const rows = await fetchAllRows<{ stock_number: string }>((from, to) =>
+    supabase.from("salvage_bikes").select("stock_number").range(from, to)
+  );
+  return rows.map((r) => r.stock_number);
 }

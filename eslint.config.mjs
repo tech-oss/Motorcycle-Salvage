@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local scratch space; may hold real client data and throwaway scripts.
+    ".scratch/**",
   ]),
 ]);
 

@@ -20,6 +20,10 @@ export type UpliftmentInstructionData = {
   upliftmentTime: string | null;
   pickupAddress: string | null;
   deliveryAddress: string | null;
+  collectionContact: string | null;
+  collectionPhone: string | null;
+  writeOffCode: string | null;
+  keysStatus: string | null;
   notes: string | null;
   generatedAt: string;
 };
@@ -107,6 +111,10 @@ const styles = StyleSheet.create({
   addressText: {
     lineHeight: 1.4,
   },
+  addressContact: {
+    marginTop: 3,
+    color: "#555",
+  },
   notes: {
     lineHeight: 1.4,
     color: "#333",
@@ -136,6 +144,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
 });
+
+/** The bike's keys_status enum, spelled the way the paperwork reads. */
+const KEYS_LABEL: Record<string, string> = {
+  yes: "YES",
+  no: "NO",
+  tbc: "TBC",
+};
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -181,6 +196,10 @@ export function UpliftmentInstructionDocument({
             <Field label="Insurer" value={dash(data.insuranceCompany)} />
             <Field label="Insured Name" value={dash(data.insuredName)} />
           </View>
+          <View style={styles.row}>
+            <Field label="Write-off Code" value={dash(data.writeOffCode)} />
+            <Field label="Keys" value={KEYS_LABEL[data.keysStatus ?? ""] ?? "—"} />
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -224,6 +243,13 @@ export function UpliftmentInstructionDocument({
             <View style={styles.addressCol}>
               <Text style={styles.addressLabel}>Pickup Address</Text>
               <Text style={styles.addressText}>{dash(data.pickupAddress)}</Text>
+              {(data.collectionContact || data.collectionPhone) && (
+                <Text style={styles.addressContact}>
+                  {[data.collectionContact, data.collectionPhone]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Text>
+              )}
             </View>
             <View style={styles.addressCol}>
               <Text style={styles.addressLabel}>Delivery Address</Text>

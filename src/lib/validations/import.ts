@@ -509,6 +509,61 @@ export function normalizeImportRow(
 }
 
 /**
+ * Builds a unique key per column for `source_row`.
+ *
+ * The master repeats header names across its invoice blocks — "Paid" appears
+ * nine times, "Amount" eight. Keying purely by name collapsed 121 columns into
+ * 83 and silently discarded the entire ledger, so repeats carry their column
+ * position. The first occurrence keeps the clean name for readability.
+ */
+export function buildSourceRowKeys(headers: string[]): string[] {
+  const seen = new Map<string, number>();
+  return headers.map((header, index) => {
+    const name = header.trim();
+    if (!name) return `Column ${index + 1}`;
+    const count = (seen.get(name) ?? 0) + 1;
+    seen.set(name, count);
+    return count === 1 ? name : `${name} (col ${index + 1})`;
+  });
+}
+
+/**
+ * Chooses which column feeds each field when several headers claim the same
+ * one.
+ *
+ * The master has "Trade", "Retails" and "Retail" side by side; all three look
+ * like a retail value, but only "Retail" is actually populated (987 rows vs
+ * 143). Taking the first match silently imported the near-empty column, so
+ * the most-populated candidate wins instead.
+ */
+export function buildAutoMapping(
+  headers: string[],
+  dataRows: string[][]
+): Record<number, ImportTargetField | undefined> {
+  const candidates = new Map<ImportTargetField, { index: number; filled: number }[]>();
+
+  headers.forEach((header, index) => {
+    const field = guessTargetField(header);
+    if (!field) return;
+    let filled = 0;
+    for (const row of dataRows) {
+      if (String(row[index] ?? "").trim()) filled++;
+    }
+    const list = candidates.get(field) ?? [];
+    list.push({ index, filled });
+    candidates.set(field, list);
+  });
+
+  const mapping: Record<number, ImportTargetField | undefined> = {};
+  for (const [field, list] of candidates) {
+    // Ties keep the leftmost column, which matches reading order.
+    list.sort((a, b) => b.filled - a.filled || a.index - b.index);
+    mapping[list[0].index] = field;
+  }
+  return mapping;
+}
+
+/**
  * Finds the real header row. The client's master has a title banner above the
  * headers, so row 1 is not the header row — scoring each candidate by how
  * many cells look like column names is more robust than a fixed index.

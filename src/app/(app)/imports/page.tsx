@@ -10,10 +10,10 @@ import { getRecentImportBatches } from "@/services/imports";
 import { formatDateTime } from "@/lib/utils";
 
 const GUIDELINES = [
-  "Use our template for best results",
-  "Required columns must be filled",
-  "First row should contain headers",
-  "Duplicate stock numbers will be skipped",
+  "Every row needs a Stock Number — it identifies the bike",
+  "The header row is detected automatically, even below a title banner",
+  "Duplicates are shown to you — nothing is overwritten unless you choose to",
+  "Columns you don't map are still stored, so nothing is lost",
 ];
 
 export default async function ImportsPage() {

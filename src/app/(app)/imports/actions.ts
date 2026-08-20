@@ -24,15 +24,49 @@ export async function checkDuplicateStockNumbers(
   if (unique.length === 0) return { duplicates: [] };
 
   const supabase = await createClient();
-  // stock_number casing in a historical workbook is never reliable, so this
-  // compares case-insensitively client-side rather than trusting .in()'s
-  // exact match.
-  const { data, error } = await supabase.from("salvage_bikes").select("stock_number");
-  if (error) return { error: `Could not check for duplicates: ${error.message}` };
-
-  const existingLower = new Set((data ?? []).map((r) => r.stock_number.toLowerCase()));
+  const existingLower = await fetchExistingStockNumbers(supabase, unique);
   const duplicates = unique.filter((s) => existingLower.has(s.toLowerCase()));
   return { duplicates };
+}
+
+/** How many stock numbers to put in a single `in.(...)` filter. */
+const LOOKUP_PAGE = 150;
+
+/**
+ * Looks up which of `wanted` already exist, keyed lowercase.
+ *
+ * Deliberately scoped to the stock numbers being asked about rather than
+ * selecting the whole table: PostgREST caps an unbounded select at 1000 rows,
+ * so a full-table read silently stopped seeing existing bikes once the fleet
+ * passed 1,000 — which is well inside the client's 1,500-row master.
+ *
+ * Casing in a historical workbook is never reliable, so both the exact value
+ * and its lower/upper variants are queried, and the comparison is done
+ * case-insensitively on the way out.
+ */
+async function fetchExistingStockNumbers(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  wanted: string[]
+): Promise<Map<string, string>> {
+  const found = new Map<string, string>();
+
+  for (let i = 0; i < wanted.length; i += LOOKUP_PAGE) {
+    const page = wanted.slice(i, i + LOOKUP_PAGE);
+    const variants = [
+      ...new Set(page.flatMap((s) => [s, s.toLowerCase(), s.toUpperCase()])),
+    ];
+    const { data, error } = await supabase
+      .from("salvage_bikes")
+      .select("id, stock_number")
+      .in("stock_number", variants);
+
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      found.set(row.stock_number.toLowerCase(), row.id);
+    }
+  }
+
+  return found;
 }
 
 export type ImportRowInput = {
@@ -63,7 +97,13 @@ export async function beginImport(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("import_batches")
-    .insert({ file_name: fileName, sheet_name: sheetName })
+    .insert({
+      file_name: fileName,
+      sheet_name: sheetName,
+      // Stamped explicitly: import_batches has no set_actor trigger, and an
+      // unattributed import is not much of an audit record.
+      created_by: profile!.id,
+    })
     .select("id")
     .single();
 
@@ -92,9 +132,11 @@ function buildPayload(
     stock_number: row.stock_number,
     file_number: row.file_number,
     claim_number: row.claim_number,
-    // A null status would violate the NOT NULL default, so unmapped rows keep
-    // the schema default instead of being forced to a guess.
-    ...(row.status ? { status: row.status } : {}),
+    // Always present, never conditionally spread: PostgREST fills a key that
+    // is missing from one object in a bulk insert with NULL rather than the
+    // column default, so a page mixing rows with and without a status failed
+    // the NOT NULL constraint and fell back to 100 single-row inserts.
+    status: row.status ?? "new_instruction",
     insurance_company_id: insurerId,
     broker: row.broker,
     assessor: row.assessor,
@@ -165,6 +207,8 @@ export async function importChunk(
   ];
   const insurerIdByName = new Map<string, string>();
   if (insurerNames.length > 0) {
+    // The insurer list is small and bounded, so a full read is fine here —
+    // unlike the bike lookup below, it cannot outgrow the row cap.
     const { data: existing, error: existingErr } = await supabase
       .from("insurance_companies")
       .select("id, name");
@@ -186,15 +230,19 @@ export async function importChunk(
     }
   }
 
-  const { data: existingBikes, error: existingBikesErr } = await supabase
-    .from("salvage_bikes")
-    .select("id, stock_number");
-  if (existingBikesErr) {
-    return { error: `Could not check existing bikes: ${existingBikesErr.message}` };
+  // Only the stock numbers in THIS chunk — reading the whole table here made
+  // the import O(n²) and, past 1,000 bikes, silently truncated.
+  let existingByStock: Map<string, string>;
+  try {
+    existingByStock = await fetchExistingStockNumbers(
+      supabase,
+      rows.map((r) => r.row.stock_number)
+    );
+  } catch (err) {
+    return {
+      error: `Could not check existing bikes: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
-  const existingByStock = new Map(
-    (existingBikes ?? []).map((b) => [b.stock_number.toLowerCase(), b.id])
-  );
 
   const toInsert: ReturnType<typeof buildPayload>[] = [];
   const toUpdate: (ReturnType<typeof buildPayload> & { id: string })[] = [];

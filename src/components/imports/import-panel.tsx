@@ -32,8 +32,9 @@ import {
 import { ImportDropzone } from "./import-dropzone";
 import {
   IMPORT_TARGET_FIELDS,
+  buildAutoMapping,
+  buildSourceRowKeys,
   detectHeaderRow,
-  guessTargetField,
   normalizeImportRow,
   type ImportTargetField,
   type MappedRow,
@@ -180,6 +181,9 @@ export function ImportPanel() {
           setIsBusy(true);
           const headers = (sheet.allRows[sheet.headerIndex] ?? []).map((h) => h.trim());
           const dataRows = sheet.allRows.slice(sheet.headerIndex + 1);
+          // Collision-free so repeated headers ("Paid", "Amount") each keep
+          // their own value rather than overwriting one another.
+          const sourceKeys = buildSourceRowKeys(headers);
 
           const validRows: NormalizedRow[] = [];
           const invalidErrors: string[] = [];
@@ -193,7 +197,7 @@ export function ImportPanel() {
             headers.forEach((header, colIndex) => {
               const field = mapping[colIndex];
               if (field) mapped[field] = rowCells[colIndex];
-              if (header) sourceRow[header] = rowCells[colIndex] ?? "";
+              if (header) sourceRow[sourceKeys[colIndex]] = rowCells[colIndex] ?? "";
             });
 
             const result = normalizeImportRow(
@@ -291,19 +295,33 @@ export function ImportPanel() {
 
           for (let i = 0; i < rows.length; i += IMPORT_CHUNK_SIZE) {
             const chunk = rows.slice(i, i + IMPORT_CHUNK_SIZE);
-            const result = await importChunk(started.batchId, chunk);
 
-            if (result.error) {
-              toast.error(result.error);
-              setWizard({ ...wizard });
-              return;
+            // A single dropped request must not abandon a half-finished
+            // import: retry the chunk, and if it still fails record it and
+            // carry on so the run is finalised and reported honestly.
+            let result: Awaited<ReturnType<typeof importChunk>> | null = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                result = await importChunk(started.batchId, chunk);
+                if (!result.error) break;
+              } catch {
+                result = { error: "The import request did not complete." };
+              }
+              await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
             }
 
-            imported += result.imported ?? 0;
-            updated += result.updated ?? 0;
-            skipped += result.skipped ?? 0;
-            duplicates += result.duplicates ?? 0;
-            if (result.failures?.length) failures.push(...result.failures);
+            if (!result || result.error) {
+              skipped += chunk.length;
+              failures.push(
+                `Rows ${i + 1}–${i + chunk.length}: ${result?.error ?? "request failed"}`
+              );
+            } else {
+              imported += result.imported ?? 0;
+              updated += result.updated ?? 0;
+              skipped += result.skipped ?? 0;
+              duplicates += result.duplicates ?? 0;
+              if (result.failures?.length) failures.push(...result.failures);
+            }
 
             setWizard({
               step: "importing",
@@ -412,20 +430,11 @@ function MappingStep({
   const headers = (sheet.allRows[sheet.headerIndex] ?? []).map((h) => h.trim());
   const dataRowCount = Math.max(0, sheet.allRows.length - sheet.headerIndex - 1);
 
-  const [mapping, setMapping] = useState<HeaderMapping>(() => {
-    const initial: HeaderMapping = {};
-    const claimed = new Set<ImportTargetField>();
-    headers.forEach((h, i) => {
-      const guess = guessTargetField(h);
-      // The master repeats generic headers ("Amount", "Paid") across its
-      // invoice blocks; only the first occurrence may claim a field.
-      if (guess && !claimed.has(guess)) {
-        initial[i] = guess;
-        claimed.add(guess);
-      }
-    });
-    return initial;
-  });
+  // When several headers claim the same field, the most-populated column
+  // wins — see buildAutoMapping.
+  const [mapping, setMapping] = useState<HeaderMapping>(() =>
+    buildAutoMapping(headers, sheet.allRows.slice(sheet.headerIndex + 1))
+  );
 
   const usedFields = new Set(Object.values(mapping).filter(Boolean));
   const hasStockNumber = Object.values(mapping).includes("stock_number");

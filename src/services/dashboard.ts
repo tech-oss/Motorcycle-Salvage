@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import { UPLIFTMENT_ACTIVE_STATUSES, statusMeta } from "@/lib/status";
 
 /**
@@ -95,14 +96,16 @@ function tally(labels: (string | null)[], fallback = "Unassigned"): Segment[] {
 
 export async function getBikesByInsurance(): Promise<Segment[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("salvage_bikes")
-    .select("insurance_companies(name)")
-    .eq("archived", false);
-
-  if (error) throw new Error(`Bikes by insurance failed: ${error.message}`);
-
-  const rows = data as unknown as { insurance_companies: { name: string } | null }[];
+  // Paged: an unbounded read stops at PostgREST's 1,000-row cap, which would
+  // quietly under-count every chart once the master is imported.
+  const rows = await fetchAllRows<{ insurance_companies: { name: string } | null }>(
+    (from, to) =>
+      supabase
+        .from("salvage_bikes")
+        .select("insurance_companies(name)")
+        .eq("archived", false)
+        .range(from, to) as never
+  );
   return tally(
     rows.map((r) => r.insurance_companies?.name.replace(/ Insurance$/, "") ?? null),
     "No insurer"
@@ -111,12 +114,13 @@ export async function getBikesByInsurance(): Promise<Segment[]> {
 
 export async function getUpliftmentStatusBreakdown(): Promise<Segment[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("salvage_bikes")
-    .select("status")
-    .eq("archived", false);
-
-  if (error) throw new Error(`Upliftment breakdown failed: ${error.message}`);
+  const rows = await fetchAllRows<{ status: string }>((from, to) =>
+    supabase
+      .from("salvage_bikes")
+      .select("status")
+      .eq("archived", false)
+      .range(from, to)
+  );
 
   // Map bike workflow states onto the upliftment stages the client thinks in.
   const stageOf = (status: string): string | null => {
@@ -127,7 +131,7 @@ export async function getUpliftmentStatusBreakdown(): Promise<Segment[]> {
     return null;
   };
 
-  const stages = (data ?? [])
+  const stages = rows
     .map((r) => stageOf(r.status))
     .filter((s): s is string => s !== null);
 
@@ -141,17 +145,16 @@ export type LocationRow = { label: string; value: number; percentage: number };
 
 export async function getBikesByLocation(): Promise<LocationRow[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("salvage_bikes")
-    .select("current_location, locations!salvage_bikes_current_location_id_fkey(city, name)")
-    .eq("archived", false);
-
-  if (error) throw new Error(`Bikes by location failed: ${error.message}`);
-
-  const rows = data as unknown as {
+  const rows = await fetchAllRows<{
     current_location: string | null;
     locations: { city: string | null; name: string } | null;
-  }[];
+  }>((from, to) =>
+    supabase
+      .from("salvage_bikes")
+      .select("current_location, locations!salvage_bikes_current_location_id_fkey(city, name)")
+      .eq("archived", false)
+      .range(from, to) as never
+  );
 
   // Prefer the normalized location's city; fall back to the free-text field
   // that historical Excel rows carry.
@@ -172,15 +175,16 @@ export async function getStatusCounts(): Promise<
   { code: string; label: string; count: number }[]
 > {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("salvage_bikes")
-    .select("status")
-    .eq("archived", false);
-
-  if (error) throw new Error(`Status counts failed: ${error.message}`);
+  const statusRows = await fetchAllRows<{ status: string }>((from, to) =>
+    supabase
+      .from("salvage_bikes")
+      .select("status")
+      .eq("archived", false)
+      .range(from, to)
+  );
 
   const counts = new Map<string, number>();
-  for (const row of data ?? []) {
+  for (const row of statusRows) {
     counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
   }
 

@@ -532,6 +532,7 @@ export interface Database {
           skipped_count?: number;
           invalid_count?: number;
           duplicate_count?: number;
+          created_by?: string | null;
         };
         // Counts are written when the run finishes, so the row is created
         // first and tallied afterwards.

@@ -2,7 +2,7 @@
 
 > This document is the permanent source of truth for what this product is, who it is for, and what Phase 1 does and does not include. Every future development session should read this file first. If a request conflicts with this document, flag the conflict before building — do not silently expand scope.
 
-Status: Phase 1 — Supabase connected. Bike create/edit, document & photo uploads, Excel import (write path), Excel master export and upliftment instruction PDFs are all built. Verified against the client's real master workbook (2026-08-21).
+Status: Phase 1 feature-complete and end-to-end verified against the live database on 2026-08-21, including a full import of the client's real 1,764-row master workbook (§19.3).
 Last updated: 2026-08-21.
 
 ---
@@ -281,6 +281,39 @@ re-importing.
 
 Insurance companies in scope: **Hollard, Bryte, Alpha**. Brokerages appear in the
 Insurance Company / Broker columns and are created on import as encountered.
+
+### 19.3 End-to-end verification (2026-08-21)
+
+Phase 1 was exercised against the live Supabase project with the client's real
+workbook. Result: **1,517 bikes imported** (1,263 from `Bryte & Hollard`, 248
+from `Alpha`, 6 pre-existing records correctly left untouched), 247 blank
+spacer rows skipped, 0 rows lost.
+
+Four defects were found only by running at real scale, and fixed:
+
+1. **PostgREST's 1,000-row cap** silently truncates any select without an
+   explicit range. The bike list showed "1000 entries" when 1,517 existed,
+   dashboard charts under-counted, and duplicate detection stopped seeing
+   existing bikes past the first thousand. All unbounded reads now page
+   (`lib/supabase/paginate.ts`).
+2. **Bulk inserts fail on mixed keys.** PostgREST fills a key missing from one
+   object in an array with NULL rather than the column default, so a page
+   mixing rows with and without a status violated NOT NULL and fell back to
+   100 single-row inserts (22s per chunk). Payloads are now uniform.
+3. **The wrong column won an auto-mapping.** "Trade", "Retails" and "Retail"
+   all look like a retail value; the first match won, and it was the nearly
+   empty one — 987 bikes imported with no retail value. The most-populated
+   candidate now wins.
+4. **`source_row` was not actually lossless.** Keyed by header name, the
+   master's repeated headers ("Paid" ×9, "Amount" ×8) overwrote each other and
+   38 of 121 columns vanished. Repeats now carry their column position.
+
+Also verified: RLS denies every viewer write path (insert/update/delete,
+document insert, storage upload, self-promotion to admin) and the export
+endpoint returns 403 for a viewer even when called directly; anonymous callers
+get nothing from any table or bucket; dates round-trip exactly; the upliftment
+PDF renders, uploads, and links to both an upliftment and a document row; and
+an import is fully reversible by deleting on `import_batch_id`.
 
 ### 19.2 Excel master export (client requirement)
 

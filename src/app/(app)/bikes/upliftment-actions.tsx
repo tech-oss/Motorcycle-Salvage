@@ -40,7 +40,9 @@ export async function generateUpliftmentInstruction(
        registration_number, vin_number, colour,
        transport_contact_person, transport_contact_number,
        upliftment_date, upliftment_time, pickup_address, delivery_address,
-       upliftment_notes, transporter_id,
+       upliftment_notes, transporter_id, write_off_code, keys_status,
+       collection_location, collection_contact, collection_phone,
+       delivery_location,
        insurance_companies(name), insured_name, transporters(name)`
     )
     .eq("id", bikeId)
@@ -68,6 +70,12 @@ export async function generateUpliftmentInstruction(
     delivery_address: string | null;
     upliftment_notes: string | null;
     transporter_id: string | null;
+    write_off_code: string | null;
+    keys_status: string | null;
+    collection_location: string | null;
+    collection_contact: string | null;
+    collection_phone: string | null;
+    delivery_location: string | null;
     insurance_companies: { name: string } | null;
     insured_name: string | null;
     transporters: { name: string } | null;
@@ -90,8 +98,15 @@ export async function generateUpliftmentInstruction(
     contactNumber: bike.transport_contact_number,
     upliftmentDate: bike.upliftment_date,
     upliftmentTime: bike.upliftment_time,
-    pickupAddress: bike.pickup_address,
-    deliveryAddress: bike.delivery_address,
+    // Same fallback the detail page shows. Historical rows carry the address
+    // only in the free-text location column, and an instruction that omits
+    // where to collect from is useless to a driver.
+    pickupAddress: bike.pickup_address ?? bike.collection_location,
+    deliveryAddress: bike.delivery_address ?? bike.delivery_location,
+    collectionContact: bike.collection_contact,
+    collectionPhone: bike.collection_phone,
+    writeOffCode: bike.write_off_code,
+    keysStatus: bike.keys_status,
     notes: bike.upliftment_notes,
     generatedAt: new Date().toLocaleString("en-ZA"),
   };
