@@ -145,8 +145,8 @@ async function runChecks(db) {
 
   const expectedTables = [
     "audit_logs", "bike_photos", "bike_statuses", "communications",
-    "documents", "insurance_companies", "locations", "profiles",
-    "salvage_bikes", "transporters", "upliftments",
+    "documents", "import_batches", "insurance_companies", "locations",
+    "profiles", "salvage_bikes", "transporters", "upliftments",
   ];
   await expect(
     db,

@@ -1,9 +1,12 @@
-import { Download, CheckCircle2, History, ShieldAlert } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CheckCircle2, History, ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { ImportPanel } from "@/components/imports/import-panel";
+import { DownloadTemplateButton } from "@/components/imports/download-template-button";
 import { EmptyState } from "@/components/layout/empty-state";
 import { getCurrentProfile, isAdmin } from "@/lib/supabase/auth";
+import { getRecentImportBatches } from "@/services/imports";
+import { formatDateTime } from "@/lib/utils";
 
 const GUIDELINES = [
   "Use our template for best results",
@@ -39,6 +42,8 @@ export default async function ImportsPage() {
     );
   }
 
+  const recentImports = await getRecentImportBatches();
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -48,10 +53,7 @@ export default async function ImportsPage() {
             Import your existing bikes data from Excel.
           </p>
         </div>
-        <Button variant="outline" className="gap-2">
-          <Download className="size-4" aria-hidden="true" />
-          Download Template
-        </Button>
+        <DownloadTemplateButton />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
@@ -89,15 +91,48 @@ export default async function ImportsPage() {
           <CardTitle className="text-base">Recent Imports</CardTitle>
         </CardHeader>
         <CardContent className="px-5">
-          {/* Import runs will be recorded in import_batches / import_rows once
-              the import pipeline writes to the database (ARCHITECTURE.md §4).
-              Showing an empty state beats inventing a history that never
-              happened. */}
-          <EmptyState
-            icon={History}
-            title="No imports yet"
-            description="Once you run an import, each batch will be listed here with its outcome — imported, updated, skipped, invalid and duplicate counts."
-          />
+          {recentImports.length === 0 ? (
+            <EmptyState
+              icon={History}
+              title="No imports yet"
+              description="Once you run an import, each batch will be listed here with its outcome — imported, updated, skipped, invalid and duplicate counts."
+            />
+          ) : (
+            <ul className="flex flex-col divide-y divide-border">
+              {recentImports.map((batch) => (
+                <li
+                  key={batch.id}
+                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {batch.file_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDateTime(batch.created_at)} · {batch.sheet_name} ·{" "}
+                      {batch.total_rows} row{batch.total_rows === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge className="bg-emerald-500/10 text-emerald-400">
+                      {batch.imported_count} imported
+                    </Badge>
+                    {batch.updated_count > 0 && (
+                      <Badge variant="outline">{batch.updated_count} updated</Badge>
+                    )}
+                    {batch.skipped_count > 0 && (
+                      <Badge variant="outline">{batch.skipped_count} skipped</Badge>
+                    )}
+                    {batch.invalid_count > 0 && (
+                      <Badge className="bg-destructive/10 text-destructive">
+                        {batch.invalid_count} invalid
+                      </Badge>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>

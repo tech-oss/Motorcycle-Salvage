@@ -492,6 +492,35 @@ export interface Database {
         Relationships: [];
       };
 
+      import_batches: {
+        Row: {
+          id: string;
+          file_name: string;
+          sheet_name: string;
+          total_rows: number;
+          imported_count: number;
+          updated_count: number;
+          skipped_count: number;
+          invalid_count: number;
+          duplicate_count: number;
+          created_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          file_name: string;
+          sheet_name: string;
+          total_rows?: number;
+          imported_count?: number;
+          updated_count?: number;
+          skipped_count?: number;
+          invalid_count?: number;
+          duplicate_count?: number;
+        };
+        Update: never;
+        Relationships: [];
+      };
+
       audit_logs: {
         Row: {
           id: string;
@@ -566,3 +595,4 @@ export type InsuranceCompanyRow = Tables<"insurance_companies">;
 export type TransporterRow = Tables<"transporters">;
 export type LocationRow = Tables<"locations">;
 export type BikeStatusRow = Tables<"bike_statuses">;
+export type ImportBatchRow = Tables<"import_batches">;
