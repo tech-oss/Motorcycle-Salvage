@@ -79,19 +79,41 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
 
 export type Segment = { label: string; value: number; color: string };
 
-function tally(labels: (string | null)[], fallback = "Unassigned"): Segment[] {
+/**
+ * Real fleets carry a long tail of one-off insurers and locations — the
+ * client's own data has 13 insurers, most with a single bike. A legend that
+ * long doesn't fit its chart card, and stretched the whole dashboard row to
+ * match, pushing everything below it down the page. Past `maxSegments`, the
+ * smallest groups collapse into one "Other" row so every donut stays legible
+ * and every dashboard card stays the same height.
+ */
+const MAX_SEGMENTS = 6;
+
+function tally(
+  labels: (string | null)[],
+  fallback = "Unassigned",
+  maxSegments = MAX_SEGMENTS
+): Segment[] {
   const counts = new Map<string, number>();
   for (const raw of labels) {
     const label = raw?.trim() || fallback;
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
-  return Array.from(counts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, value], i) => ({
-      label,
-      value,
-      color: CHART_COLORS[i % CHART_COLORS.length],
-    }));
+
+  const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+
+  const top = sorted.slice(0, maxSegments);
+  const rest = sorted.slice(maxSegments);
+  const otherTotal = rest.reduce((sum, [, count]) => sum + count, 0);
+  if (otherTotal > 0) {
+    top.push([`Other (${rest.length})`, otherTotal]);
+  }
+
+  return top.map(([label, value], i) => ({
+    label,
+    value,
+    color: CHART_COLORS[i % CHART_COLORS.length],
+  }));
 }
 
 export async function getBikesByInsurance(): Promise<Segment[]> {

@@ -136,7 +136,7 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
             <Card className="py-5">
               <CardHeader className="px-5">
                 <CardTitle className="text-base">Bikes by Insurance</CardTitle>
