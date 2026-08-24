@@ -142,8 +142,19 @@
   }
   html {
     color-scheme: dark;
+    /* Belt-and-suspenders against the app shell's h-dvh container: without
+       this, scrolling #main to its limit hands leftover momentum to the
+       document (overscroll chaining), dragging the whole shell — sticky
+       footer included — up past its intended position and revealing blank
+       body background beneath it. */
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
   body {
     @apply bg-background text-foreground;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
 }

@@ -11,7 +11,7 @@ export function AppSidebar() {
           <Logo />
         </Link>
       </div>
-      <div className="flex-1 overflow-y-auto py-4">
+      <div className="flex-1 overflow-y-auto overscroll-contain py-4">
         <NavLinks />
       </div>
       <SidebarUser />
