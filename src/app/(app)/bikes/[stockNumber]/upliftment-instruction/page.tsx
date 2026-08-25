@@ -66,10 +66,9 @@ export default async function UpliftmentInstructionPage({
           <CardTitle className="text-base">Claim &amp; Insurance</CardTitle>
         </CardHeader>
         <CardContent className="px-5">
-          <Row label="File Number" value={dash(bike.fileNumber)} />
           <Row label="Claim Number" value={dash(bike.claimNumber)} />
           <Row label="Insurer" value={dash(bike.insuranceCompany)} />
-          <Row label="Insured Name" value={dash(bike.insuredName)} />
+          <Row label="Write-off Code" value={dash(bike.writeOffCode)} />
         </CardContent>
       </Card>
 
@@ -85,7 +84,6 @@ export default async function UpliftmentInstructionPage({
           <Row label="Year" value={dash(bike.year)} />
           <Row label="Registration" value={dash(bike.registrationNumber)} />
           <Row label="VIN" value={dash(bike.vin)} />
-          <Row label="Colour" value={dash(bike.colour)} />
         </CardContent>
       </Card>
 
@@ -110,10 +108,7 @@ export default async function UpliftmentInstructionPage({
             label="Pickup Address"
             value={dash(bike.pickupAddress ?? bike.collectionLocation)}
           />
-          <Row
-            label="Delivery Address"
-            value={dash(bike.deliveryAddress ?? bike.deliveryLocation)}
-          />
+          <Row label="Delivery Address" value={dash(bike.deliveryAddress)} />
           {bike.upliftmentNotes && <Row label="Notes" value={bike.upliftmentNotes} />}
         </CardContent>
       </Card>

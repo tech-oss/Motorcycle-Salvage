@@ -76,20 +76,13 @@ export interface BikeListItem {
 
 /** Full record for the bike detail page. */
 export interface Bike extends BikeListItem {
-  fileNumber: string | null;
-
   broker: string | null;
-  assessor: string | null;
-  assessorContact: string | null;
-  insuredName: string | null;
-  insuredAddress: string | null;
-  insuredPhone: string | null;
-  insuredEmail: string | null;
+  claimsHandler: string | null;
+  salvageClerk: string | null;
 
   registrationNumber: string | null;
   vin: string | null;
-  odometer: number | null;
-  colour: string | null;
+  engineCapacityCc: number | null;
   engineNumber: string | null;
   keysStatus: KeysStatus | null;
   writeOffCode: string | null;
@@ -98,17 +91,25 @@ export interface Bike extends BikeListItem {
   collectionLocation: string | null;
   collectionContact: string | null;
   collectionPhone: string | null;
-  deliveryLocation: string | null;
   currentLocation: string | null;
-  storageLocation: string | null;
+  arrivalDate: string | null;
 
   retailValue: number | null;
-  salvageValue: number | null;
-  salvagePercentage: number | null;
+  insuranceAmount: number | null;
+  insuranceInvoiceNo: string | null;
+  commissionRatePercent: number | null;
+  /** Computed — Insurance Amount × Commission Rate. */
   commission: number | null;
-  releaseFee: number | null;
-  totalLoss: boolean;
+  /** Computed — Commission + 15% VAT. */
+  totalCommsInclVat: number | null;
+  /** Computed — Insurance Amount − Total Comms incl VAT. */
+  insuranceInvToMssa: number | null;
+  /** Computed — Insurance Inv to MSSA ÷ Retail Value, 0-100. */
+  salvagePercentage: number | null;
   estimatorCost: number | null;
+
+  soldTo: string | null;
+  sellingAmount: number | null;
 
   transporter: string | null;
   transportContactPerson: string | null;

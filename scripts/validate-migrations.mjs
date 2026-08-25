@@ -272,6 +272,24 @@ async function runChecks(db) {
     (rows) => rows[0]?.data_type === "jsonb"
   );
 
+  // The commission chain (client feedback, 2026-08-25) — rate is always
+  // typed, everything else is derived from it server-side.
+  const commissionColumns = [
+    "commission_rate_percent", "total_comms_incl_vat", "insurance_inv_to_mssa",
+  ];
+  await expect(
+    db,
+    "salvage_bikes carries the commission-chain columns",
+    `select column_name from information_schema.columns
+      where table_schema = 'public' and table_name = 'salvage_bikes'`,
+    (rows) => {
+      const names = rows.map((r) => r.column_name);
+      const missing = commissionColumns.filter((c) => !names.includes(c));
+      if (missing.length) console.log("   missing:", missing.join(", "));
+      return missing.length === 0;
+    }
+  );
+
   await expect(
     db,
     "both storage buckets created and private",
@@ -481,6 +499,11 @@ async function runChecks(db) {
     "salvage_percentage over 100 rejected",
     `insert into public.salvage_bikes (stock_number, salvage_percentage)
        values ('M99996', 101)`
+  );
+  await mustFail(
+    "commission_rate_percent over 100 rejected",
+    `insert into public.salvage_bikes (stock_number, commission_rate_percent)
+       values ('M99995', 150)`
   );
 
   // Privilege-escalation guard: a staff user editing their own profile.

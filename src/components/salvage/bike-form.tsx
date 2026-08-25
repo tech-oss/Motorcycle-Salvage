@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Loader2, Save } from "lucide-react";
@@ -15,9 +15,11 @@ import {
   TextField,
   TextAreaField,
   SelectField,
-  CheckboxField,
+  ComputedField,
 } from "./bike-form-fields";
 import { bikeFormSchema, type BikeFormInput } from "@/lib/validations/bike";
+import { computeCommissionChain } from "@/lib/commission";
+import { formatCurrencyZAR } from "@/lib/utils";
 import { createBike, updateBike } from "@/app/(app)/bikes/actions";
 import type { BikeFormReferenceData } from "@/services/reference";
 
@@ -27,6 +29,12 @@ const KEYS_OPTIONS = [
   { value: "tbc", label: "TBC" },
 ];
 
+/** Parses a form field's string/number/null value into a number or null. */
+function toNumber(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v).replace(/\s/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
 
 export function BikeForm({
   reference,
@@ -54,6 +62,22 @@ export function BikeForm({
     rows.map((r) => ({ value: r.id, label: r.name }));
 
   const locationOptions = toOptions(reference.locations);
+
+  // Live commission preview — the same chain the server computes
+  // authoritatively on save, so this is feedback only, never trusted input.
+  const [retailValue, insuranceAmount, commissionRatePercent] = useWatch({
+    control: form.control,
+    name: ["retail_value", "insurance_amount", "commission_rate_percent"],
+  });
+  const preview = useMemo(
+    () =>
+      computeCommissionChain({
+        retailValue: toNumber(retailValue),
+        insuranceAmount: toNumber(insuranceAmount),
+        commissionRatePercent: toNumber(commissionRatePercent),
+      }),
+    [retailValue, insuranceAmount, commissionRatePercent]
+  );
 
   function onSubmit(values: BikeFormInput) {
     setFormError(undefined);
@@ -118,11 +142,6 @@ export function BikeForm({
           />
           <TextField
             control={form.control}
-            name="file_number"
-            label="File Number"
-          />
-          <TextField
-            control={form.control}
             name="claim_number"
             label="Claim Number"
           />
@@ -152,7 +171,7 @@ export function BikeForm({
           />
         </Section>
 
-        <Section title="Insurance & Assessor">
+        <Section title="Insurance">
           <SelectField
             control={form.control}
             name="insurance_company_id"
@@ -160,36 +179,15 @@ export function BikeForm({
             options={toOptions(reference.insurers)}
           />
           <TextField control={form.control} name="broker" label="Broker" />
-          <TextField control={form.control} name="assessor" label="Assessor" />
           <TextField
             control={form.control}
-            name="assessor_contact"
-            label="Assessor Contact"
-            inputMode="tel"
+            name="claims_handler"
+            label="Claims Handler"
           />
           <TextField
             control={form.control}
-            name="insured_name"
-            label="Insured Name"
-          />
-          <TextField
-            control={form.control}
-            name="insured_phone"
-            label="Insured Phone"
-            inputMode="tel"
-          />
-          <TextField
-            control={form.control}
-            name="insured_email"
-            label="Insured Email"
-            type="email"
-            inputMode="email"
-          />
-          <TextAreaField
-            control={form.control}
-            name="insured_address"
-            label="Insured Address"
-            className="sm:col-span-2"
+            name="salvage_clerk"
+            label="Salvage Clerk"
           />
         </Section>
 
@@ -205,17 +203,16 @@ export function BikeForm({
           />
           <TextField
             control={form.control}
+            name="engine_capacity_cc"
+            label="CC"
+            inputMode="numeric"
+          />
+          <TextField
+            control={form.control}
             name="registration_number"
             label="Registration Number"
           />
           <TextField control={form.control} name="vin_number" label="VIN" />
-          <TextField
-            control={form.control}
-            name="odometer"
-            label="Odometer (km)"
-            inputMode="numeric"
-          />
-          <TextField control={form.control} name="colour" label="Colour" />
           <TextField
             control={form.control}
             name="engine_number"
@@ -241,54 +238,6 @@ export function BikeForm({
           />
         </Section>
 
-        <Section title="Condition">
-          <TextField
-            control={form.control}
-            name="pre_accident_condition"
-            label="Pre-accident Condition"
-          />
-          <TextField
-            control={form.control}
-            name="severity_of_impact"
-            label="Severity of Impact"
-          />
-          <TextField
-            control={form.control}
-            name="tyre_condition"
-            label="Tyre Condition"
-          />
-          <TextAreaField
-            control={form.control}
-            name="pre_accident_damage"
-            label="Pre-accident Damage"
-            className="sm:col-span-2 lg:col-span-3"
-          />
-          <TextField
-            control={form.control}
-            name="tyre_depth_left_front"
-            label="Tyre Depth — Left Front (mm)"
-            inputMode="decimal"
-          />
-          <TextField
-            control={form.control}
-            name="tyre_depth_right_front"
-            label="Tyre Depth — Right Front (mm)"
-            inputMode="decimal"
-          />
-          <TextField
-            control={form.control}
-            name="tyre_depth_left_rear"
-            label="Tyre Depth — Left Rear (mm)"
-            inputMode="decimal"
-          />
-          <TextField
-            control={form.control}
-            name="tyre_depth_right_rear"
-            label="Tyre Depth — Right Rear (mm)"
-            inputMode="decimal"
-          />
-        </Section>
-
         <Section
           title="Location"
           description="Free-text addresses are captured as-is; the linked location powers reporting."
@@ -309,26 +258,24 @@ export function BikeForm({
             label="Collection Phone"
             inputMode="tel"
           />
-          <TextField
-            control={form.control}
-            name="delivery_location"
-            label="Delivery Address"
-          />
           <SelectField
             control={form.control}
             name="current_location_id"
-            label="Current Location"
+            label="Store / Current Location"
             options={locationOptions}
           />
-          <SelectField
+          <TextField
             control={form.control}
-            name="storage_location_id"
-            label="Storage Location"
-            options={locationOptions}
+            name="arrival_date"
+            label="Arrival Date"
+            type="date"
           />
         </Section>
 
-        <Section title="Financial">
+        <Section
+          title="Financial"
+          description="Retail, Insurance Amount and Commission Rate are typed — everything below is calculated automatically, the same way the Excel master does it."
+        >
           <TextField
             control={form.control}
             name="retail_value"
@@ -337,27 +284,21 @@ export function BikeForm({
           />
           <TextField
             control={form.control}
-            name="salvage_value"
-            label="Salvage Value (R)"
+            name="insurance_amount"
+            label="Insurance Amount (R)"
             inputMode="decimal"
           />
           <TextField
             control={form.control}
-            name="salvage_percentage"
-            label="Salvage %"
+            name="commission_rate_percent"
+            label="Commission Rate (%)"
             inputMode="decimal"
+            placeholder="15"
           />
           <TextField
             control={form.control}
-            name="mssa_commission"
-            label="Commission (R)"
-            inputMode="decimal"
-          />
-          <TextField
-            control={form.control}
-            name="release_fee"
-            label="Release Fee (R)"
-            inputMode="decimal"
+            name="insurance_invoice_no"
+            label="Insurance Invoice No"
           />
           <TextField
             control={form.control}
@@ -365,16 +306,50 @@ export function BikeForm({
             label="Estimator Cost (R)"
             inputMode="decimal"
           />
+
+          <ComputedField
+            label="Commission (R)"
+            value={
+              preview.commission !== null ? formatCurrencyZAR(preview.commission) : "—"
+            }
+            hint="Insurance Amount × Commission Rate"
+          />
+          <ComputedField
+            label="Total Comms incl VAT (R)"
+            value={
+              preview.totalCommsInclVat !== null
+                ? formatCurrencyZAR(preview.totalCommsInclVat)
+                : "—"
+            }
+            hint="Commission + 15% VAT"
+          />
+          <ComputedField
+            label="Insurance Inv to MSSA (R)"
+            value={
+              preview.insuranceInvToMssa !== null
+                ? formatCurrencyZAR(preview.insuranceInvToMssa)
+                : "—"
+            }
+            hint="Insurance Amount − Total Comms incl VAT"
+          />
+          <ComputedField
+            label="% After Commission"
+            value={
+              preview.percentageAfterCommission !== null
+                ? `${preview.percentageAfterCommission.toFixed(2)}%`
+                : "—"
+            }
+            hint="Insurance Inv to MSSA ÷ Retail Value"
+          />
+        </Section>
+
+        <Section title="Sale">
+          <TextField control={form.control} name="sold_to" label="Sold To" />
           <TextField
             control={form.control}
-            name="release_payment_date"
-            label="Release Payment Date"
-            type="date"
-          />
-          <CheckboxField
-            control={form.control}
-            name="total_loss"
-            label="Total loss"
+            name="selling_amount"
+            label="Selling Amount (R)"
+            inputMode="decimal"
           />
         </Section>
 

@@ -28,6 +28,8 @@ const dash = (v: string | number | null | undefined) =>
 
 const money = (v: number | null) => (v === null ? "—" : formatCurrencyZAR(v));
 
+const percent = (v: number | null) => (v === null ? "—" : `${v.toFixed(2)}%`);
+
 export function BikeOverview({ bike }: { bike: Bike }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
@@ -43,16 +45,10 @@ export function BikeOverview({ bike }: { bike: Bike }) {
               ["Make", dash(bike.make)],
               ["Model", dash(bike.model)],
               ["Year", dash(bike.year)],
-              ["Colour", dash(bike.colour)],
+              ["CC", dash(bike.engineCapacityCc)],
               ["Engine No.", dash(bike.engineNumber)],
               ["VIN", dash(bike.vin)],
               ["Registration", dash(bike.registrationNumber)],
-              [
-                "Odometer",
-                bike.odometer !== null
-                  ? `${bike.odometer.toLocaleString("en-ZA")} km`
-                  : "—",
-              ],
               ["Keys", bike.keysStatus ? KEYS_LABELS[bike.keysStatus] : "—"],
               ["Write-off Code", dash(bike.writeOffCode)],
             ]}
@@ -63,7 +59,7 @@ export function BikeOverview({ bike }: { bike: Bike }) {
       <Card className="gap-3 py-5">
         <CardHeader className="px-5">
           <CardTitle className="text-sm text-muted-foreground">
-            Insurance / Assessor
+            Insurance
           </CardTitle>
         </CardHeader>
         <CardContent className="px-5">
@@ -71,13 +67,11 @@ export function BikeOverview({ bike }: { bike: Bike }) {
             rows={[
               ["Insurance", dash(bike.insuranceCompany)],
               ["Broker", dash(bike.broker)],
-              ["Assessor", dash(bike.assessor)],
-              ["Contact", dash(bike.assessorContact)],
+              ["Claims Handler", dash(bike.claimsHandler)],
+              ["Salvage Clerk", dash(bike.salvageClerk)],
               ["Claim No.", dash(bike.claimNumber)],
               ["Loss Date", formatDate(bike.lossDate)],
-              ["Insured", dash(bike.insuredName)],
-              ["Phone", dash(bike.insuredPhone)],
-              ["Email", dash(bike.insuredEmail)],
+              ["Insurance Invoice No.", dash(bike.insuranceInvoiceNo)],
             ]}
           />
         </CardContent>
@@ -93,9 +87,9 @@ export function BikeOverview({ bike }: { bike: Bike }) {
               ["Collection", dash(bike.collectionLocation)],
               ["Contact", dash(bike.collectionContact)],
               ["Phone", dash(bike.collectionPhone)],
-              ["Delivery", dash(bike.deliveryLocation)],
-              ["Current Location", dash(bike.currentLocation)],
-              ["Storage", dash(bike.storageLocation)],
+              ["Store", dash(bike.currentLocation)],
+              ["Arrival Date", formatDate(bike.arrivalDate)],
+              ["Sold To", dash(bike.soldTo)],
             ]}
           />
         </CardContent>
@@ -111,17 +105,19 @@ export function BikeOverview({ bike }: { bike: Bike }) {
           <InfoList
             rows={[
               ["Retail Value", money(bike.retailValue)],
-              ["Salvage Value", money(bike.salvageValue)],
+              ["Insurance Amount", money(bike.insuranceAmount)],
               [
-                "Salvage %",
-                bike.salvagePercentage !== null
-                  ? `${bike.salvagePercentage}%`
+                "Commission Rate",
+                bike.commissionRatePercent !== null
+                  ? `${bike.commissionRatePercent}%`
                   : "—",
               ],
               ["Commission", money(bike.commission)],
-              ["Release Fee", money(bike.releaseFee)],
+              ["Total Comms incl VAT", money(bike.totalCommsInclVat)],
+              ["Insurance Inv to MSSA", money(bike.insuranceInvToMssa)],
+              ["% After Commission", percent(bike.salvagePercentage)],
               ["Estimator Cost", money(bike.estimatorCost)],
-              ["Total Loss", bike.totalLoss ? "Yes" : "No"],
+              ["Selling Amount", money(bike.sellingAmount)],
             ]}
           />
         </CardContent>

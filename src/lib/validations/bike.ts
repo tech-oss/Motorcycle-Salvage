@@ -3,11 +3,18 @@ import { z } from "zod";
 /**
  * Validation for the salvage bike form.
  *
+ * Field set was trimmed to exactly what the client's real Excel master
+ * contains (client feedback, 2026-08-25) — the richer schema from the
+ * original scope brief (assessor/insured contact details, accident
+ * condition, tyre depths) never matched what the client actually tracks and
+ * is deferred, not deleted: those columns still exist in the database for
+ * anything already saved, they're just no longer editable here.
+ *
  * Deliberately permissive beyond `stock_number`. Salvage instructions arrive
  * incomplete — a bike often lands with a claim number and nothing else, and
- * the rest is filled in over days as the assessor and transporter report back.
- * Forcing fields the client doesn't have yet would push staff back to Excel,
- * which is the exact problem this replaces (PROJECT_SCOPE §3).
+ * the rest is filled in over days as the transporter reports back. Forcing
+ * fields the client doesn't have yet would push staff back to Excel, which
+ * is the exact problem this replaces (PROJECT_SCOPE §3).
  *
  * HTML forms submit strings for everything, so each field coerces "" to null
  * rather than passing an empty string to a date/numeric column.
@@ -88,71 +95,49 @@ export const bikeFormSchema = z.object({
     .trim()
     .min(1, "Stock number is required")
     .max(50, "Stock number is too long"),
-  file_number: optionalText,
   claim_number: optionalText,
   status: z.string().trim().min(1, "Status is required"),
 
   // Insurance
   insurance_company_id: optionalUuid,
   broker: optionalText,
-  assessor: optionalText,
-  assessor_contact: optionalText,
-  insured_name: optionalText,
-  insured_address: optionalText,
-  insured_phone: optionalText,
-  insured_email: z
-    .string()
-    .trim()
-    .transform((v) => (v === "" ? null : v))
-    .nullable()
-    .refine((v) => v === null || z.string().email().safeParse(v).success, {
-      message: "Enter a valid email address",
-    }),
+  claims_handler: optionalText,
+  salvage_clerk: optionalText,
 
   // Motorcycle
   make: optionalText,
   model: optionalText,
   year: optionalNumber("Year", { min: 1900, max: 2100 }),
+  engine_capacity_cc: optionalNumber("CC", { min: 0 }),
   registration_number: optionalText,
   vin_number: optionalText,
-  odometer: optionalNumber("Odometer", { min: 0 }),
-  colour: optionalText,
   engine_number: optionalText,
   keys_status: optionalEnum(["yes", "no", "tbc"] as const),
   write_off_code: optionalText,
   loss_date: optionalDate,
-
-  // Condition
-  pre_accident_condition: optionalText,
-  severity_of_impact: optionalText,
-  pre_accident_damage: optionalText,
-  tyre_condition: optionalText,
-  tyre_depth_left_front: optionalNumber("Tyre depth", { min: 0, max: 30 }),
-  tyre_depth_right_front: optionalNumber("Tyre depth", { min: 0, max: 30 }),
-  tyre_depth_left_rear: optionalNumber("Tyre depth", { min: 0, max: 30 }),
-  tyre_depth_right_rear: optionalNumber("Tyre depth", { min: 0, max: 30 }),
 
   // Location — free text as captured, plus optional normalized FK
   collection_location: optionalText,
   collection_location_id: optionalUuid,
   collection_contact: optionalText,
   collection_phone: optionalText,
-  delivery_location: optionalText,
-  delivery_location_id: optionalUuid,
   current_location: optionalText,
   current_location_id: optionalUuid,
-  storage_location: optionalText,
-  storage_location_id: optionalUuid,
+  arrival_date: optionalDate,
 
-  // Financial
+  // Financial — retail_value, insurance_amount and commission_rate_percent
+  // are the three typed inputs; commission, total_comms_incl_vat,
+  // insurance_inv_to_mssa and salvage_percentage are computed server-side
+  // from those three (lib/commission.ts) and are never submitted directly.
   retail_value: optionalNumber("Retail value", { min: 0 }),
-  salvage_value: optionalNumber("Salvage value", { min: 0 }),
-  salvage_percentage: optionalNumber("Salvage percentage", { min: 0, max: 100 }),
-  mssa_commission: optionalNumber("Commission", { min: 0 }),
-  release_fee: optionalNumber("Release fee", { min: 0 }),
-  release_payment_date: optionalDate,
-  total_loss: z.boolean(),
+  insurance_amount: optionalNumber("Insurance amount", { min: 0 }),
+  commission_rate_percent: optionalNumber("Commission rate", { min: 0, max: 100 }),
+  insurance_invoice_no: optionalText,
   estimator_cost: optionalNumber("Estimator cost", { min: 0 }),
+
+  // Sale
+  sold_to: optionalText,
+  selling_amount: optionalNumber("Selling amount", { min: 0 }),
 
   // Upliftment
   transporter_id: optionalUuid,
@@ -188,54 +173,36 @@ export type BikeFormInput = z.input<typeof bikeFormSchema>;
  */
 export const EMPTY_BIKE_FORM: BikeFormInput = {
   stock_number: "",
-  file_number: "",
   claim_number: "",
   status: "new_instruction",
   insurance_company_id: "",
   broker: "",
-  assessor: "",
-  assessor_contact: "",
-  insured_name: "",
-  insured_address: "",
-  insured_phone: "",
-  insured_email: "",
+  claims_handler: "",
+  salvage_clerk: "",
   make: "",
   model: "",
   year: "",
+  engine_capacity_cc: "",
   registration_number: "",
   vin_number: "",
-  odometer: "",
-  colour: "",
   engine_number: "",
   keys_status: "",
   write_off_code: "",
   loss_date: "",
-  pre_accident_condition: "",
-  severity_of_impact: "",
-  pre_accident_damage: "",
-  tyre_condition: "",
-  tyre_depth_left_front: "",
-  tyre_depth_right_front: "",
-  tyre_depth_left_rear: "",
-  tyre_depth_right_rear: "",
   collection_location: "",
   collection_location_id: "",
   collection_contact: "",
   collection_phone: "",
-  delivery_location: "",
-  delivery_location_id: "",
   current_location: "",
   current_location_id: "",
-  storage_location: "",
-  storage_location_id: "",
+  arrival_date: "",
   retail_value: "",
-  salvage_value: "",
-  salvage_percentage: "",
-  mssa_commission: "",
-  release_fee: "",
-  release_payment_date: "",
-  total_loss: false,
+  insurance_amount: "",
+  commission_rate_percent: "",
+  insurance_invoice_no: "",
   estimator_cost: "",
+  sold_to: "",
+  selling_amount: "",
   transporter_id: "",
   transport_contact_person: "",
   transport_contact_number: "",

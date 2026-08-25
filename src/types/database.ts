@@ -337,6 +337,14 @@ export interface Database {
           insurance_amount: number | null;
           source_row: Json | null;
           import_batch_id: string | null;
+
+          // Added by 008 — the commission chain (PROJECT_SCOPE feedback,
+          // 2026-08-25). mssa_commission and salvage_percentage above are
+          // reused as computed outputs; only the rate and the two
+          // intermediate figures needed new columns.
+          commission_rate_percent: number | null;
+          total_comms_incl_vat: number | null;
+          insurance_inv_to_mssa: number | null;
         };
         Insert: Partial<
           Omit<

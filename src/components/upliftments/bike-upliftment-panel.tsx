@@ -56,10 +56,7 @@ export function BikeUpliftmentPanel({
                 label="Pickup Address"
                 value={dash(bike.pickupAddress ?? bike.collectionLocation)}
               />
-              <Row
-                label="Delivery Address"
-                value={dash(bike.deliveryAddress ?? bike.deliveryLocation)}
-              />
+              <Row label="Delivery Address" value={dash(bike.deliveryAddress)} />
               {bike.upliftmentNotes && (
                 <Row label="Notes" value={bike.upliftmentNotes} />
               )}

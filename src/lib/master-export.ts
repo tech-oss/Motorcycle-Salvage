@@ -38,6 +38,8 @@ export type MasterExportBike = {
   estimator_cost: number | null;
   insurance_invoice_no: string | null;
   insurance_amount: number | null;
+  /** Negotiated per deal — feeds the "% Amount" formula's rate directly. */
+  commission_rate_percent: number | null;
   status: string;
   current_location: string | null;
   arrival_date: string | null;
@@ -102,6 +104,26 @@ function cellRef(colIndex: number, excelRow: number): string {
 
 const DATA_START_ROW = 3; // matches the source workbook's own layout (rows 1-2 are banner/header)
 
+/** Matches the rate literal in a template like "AB{R}*15%". */
+const RATE_PATTERN = /\*\s*\d+(?:\.\d+)?\s*%/;
+
+/**
+ * Substitutes the bike's own negotiated rate into a "% Amount"-style
+ * formula template, in place of whatever static rate the dominant-pattern
+ * extraction found. The rate isn't a column in the source workbook — it's
+ * typed directly into each row's formula — so the export has to do the same
+ * per row rather than applying one rate to the whole column (confirmed with
+ * the client: the rate varies deal to deal with no derivable pattern).
+ *
+ * Falls back to the template's own rate when the bike has none set, so
+ * older bikes without a captured rate still export a formula rather than a
+ * blank cell.
+ */
+function applyCommissionRate(template: string, ratePercent: number | null): string {
+  if (ratePercent === null || !RATE_PATTERN.test(template)) return template;
+  return template.replace(RATE_PATTERN, `*${ratePercent}%`);
+}
+
 /**
  * Builds one worksheet reproducing the client's exact column layout.
  * `bannerText` and `bannerCol` recreate the title banner row so the sheet
@@ -135,7 +157,8 @@ export function buildMasterSheet(
       const ref = cellRef(col.index, excelRow);
 
       if (col.kind === "formula" && col.formula) {
-        ws[ref] = { t: "n", f: col.formula.replace(/\{R\}/g, String(excelRow)) };
+        const withRate = applyCommissionRate(col.formula, bike.commission_rate_percent);
+        ws[ref] = { t: "n", f: withRate.replace(/\{R\}/g, String(excelRow)) };
         return;
       }
 

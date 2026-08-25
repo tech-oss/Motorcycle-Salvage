@@ -22,8 +22,9 @@ const SELECT_COLUMNS =
   "salvage_clerk, make, model, engine_capacity_cc, year, keys_status, vin_number, " +
   "engine_number, registration_number, write_off_code, retail_value, salvage_value, " +
   "salvage_percentage, mssa_commission, release_fee, estimator_cost, " +
-  "insurance_invoice_no, insurance_amount, status, current_location, arrival_date, " +
-  "date_received, sold_to, selling_amount, notes, source_row, insurance_companies(name)";
+  "insurance_invoice_no, insurance_amount, commission_rate_percent, status, " +
+  "current_location, arrival_date, date_received, sold_to, selling_amount, notes, " +
+  "source_row, insurance_companies(name)";
 
 /** PostgREST caps a single response, so the export pages through everything. */
 const PAGE_SIZE = 1000;

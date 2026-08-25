@@ -199,6 +199,32 @@ export function SelectField({
   );
 }
 
+/**
+ * Read-only figure derived from other fields — never user-editable, just
+ * shown live as those fields change, the way Excel recalculates a formula
+ * cell. The authoritative value is always recomputed server-side on save
+ * (lib/commission.ts via bikes/actions.ts); this is purely feedback.
+ */
+export function ComputedField({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <div className="flex h-9 items-center rounded-md border border-dashed border-border bg-muted/40 px-3 text-sm text-muted-foreground">
+        {value}
+      </div>
+      {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+    </div>
+  );
+}
+
 export function CheckboxField({
   control,
   name,

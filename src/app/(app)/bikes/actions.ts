@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile, canWrite, isAdmin } from "@/lib/supabase/auth";
-import { bikeFormSchema, type BikeFormInput } from "@/lib/validations/bike";
+import { bikeFormSchema, type BikeFormInput, type BikeFormValues } from "@/lib/validations/bike";
+import { computeCommissionChain } from "@/lib/commission";
 
 export type BikeActionState = {
   error?: string;
@@ -31,6 +32,31 @@ function describeDbError(error: { code?: string; message: string }): string {
   return `Could not save: ${error.message}`;
 }
 
+/**
+ * Adds the computed commission chain to a validated form payload.
+ *
+ * Recomputed here rather than trusted from the client — the browser only
+ * shows a live preview for staff feedback, this is the number that's
+ * actually persisted, so a tampered or stale client value can never reach
+ * the database.
+ */
+function withCommissionChain(values: BikeFormValues) {
+  const { commission, totalCommsInclVat, insuranceInvToMssa, percentageAfterCommission } =
+    computeCommissionChain({
+      retailValue: values.retail_value,
+      insuranceAmount: values.insurance_amount,
+      commissionRatePercent: values.commission_rate_percent,
+    });
+
+  return {
+    ...values,
+    mssa_commission: commission,
+    total_comms_incl_vat: totalCommsInclVat,
+    insurance_inv_to_mssa: insuranceInvToMssa,
+    salvage_percentage: percentageAfterCommission,
+  };
+}
+
 export async function createBike(
   values: BikeFormInput
 ): Promise<BikeActionState> {
@@ -47,7 +73,7 @@ export async function createBike(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("salvage_bikes")
-    .insert(parsed.data)
+    .insert(withCommissionChain(parsed.data))
     .select("stock_number")
     .single();
 
@@ -75,7 +101,7 @@ export async function updateBike(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("salvage_bikes")
-    .update(parsed.data)
+    .update(withCommissionChain(parsed.data))
     .eq("id", id)
     .select("stock_number")
     .maybeSingle();

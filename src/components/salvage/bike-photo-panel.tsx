@@ -17,10 +17,6 @@ export function BikePhotoPanel({
     ["Loss Date", formatDate(bike.lossDate)],
     ["VIN Number", bike.vin ?? "—"],
     ["Registration", bike.registrationNumber ?? "—"],
-    [
-      "Odometer",
-      bike.odometer !== null ? `${bike.odometer.toLocaleString("en-ZA")} km` : "—",
-    ],
   ];
 
   return (
