@@ -1,25 +1,20 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { statusMeta } from "@/lib/status";
-import {
-  sheetForInsurer,
-  toExportRow,
-  type ExportBike,
-  type ExportSourceRow,
-} from "@/lib/export-columns";
+import type { MasterExportBike } from "@/lib/master-export";
 
 /**
- * Data for the Excel master export (client requirement: "The program needs to
- * export to an Excel anyway... We must keep a master").
- *
- * The export mirrors the client's own workbook shape: one worksheet per
- * insurance grouping, with their column names, so the file they get back is
- * the file they recognise. Column definitions live in lib/export-columns.ts
- * so they can be verified against the importer.
+ * Data for the Excel master export. The client's requirement, stated
+ * directly: the exported file must be the SAME workbook they've always
+ * used — same tabs, same 121/102 columns, same live formulas — because
+ * that file is their reporting and insurance/audit record, and a
+ * simplified export would mean re-entering data by hand ("double the
+ * work"). Column reconstruction lives in lib/master-layout.ts and
+ * lib/master-export.ts; this module only fetches the rows.
  */
 
-type Row = Omit<ExportSourceRow, "insurance_company_name"> & {
+type Row = Omit<MasterExportBike, "insurance_company_name" | "source_row"> & {
   insurance_companies: { name: string } | null;
+  source_row: unknown;
 };
 
 const SELECT_COLUMNS =
@@ -28,44 +23,51 @@ const SELECT_COLUMNS =
   "engine_number, registration_number, write_off_code, retail_value, salvage_value, " +
   "salvage_percentage, mssa_commission, release_fee, estimator_cost, " +
   "insurance_invoice_no, insurance_amount, status, current_location, arrival_date, " +
-  "date_received, sold_to, selling_amount, notes, insurance_companies(name)";
+  "date_received, sold_to, selling_amount, notes, source_row, insurance_companies(name)";
 
 /** PostgREST caps a single response, so the export pages through everything. */
 const PAGE_SIZE = 1000;
 
-export type MasterExport = {
-  /** Worksheet name -> rows, matching the client's tab structure. */
-  sheets: Record<string, ExportBike[]>;
+/**
+ * The client's master is split by insurer group: "Bryte & Hollard" and
+ * "Alpha". A bike with any other insurer (or none) is grouped into
+ * "Bryte & Hollard" — it's the general-purpose sheet with the fuller
+ * column set, and there is no third tab in the client's own file to route
+ * it to instead.
+ */
+function sheetForInsurer(name: string | null): "Bryte & Hollard" | "Alpha" {
+  const n = (name ?? "").toLowerCase();
+  if (n.includes("alpha") || n.includes("ium")) return "Alpha";
+  return "Bryte & Hollard";
+}
+
+export type MasterExportData = {
+  sheets: Record<"Bryte & Hollard" | "Alpha", MasterExportBike[]>;
   total: number;
 };
 
-export async function getMasterExport({
-  includeArchived = true,
-}: { includeArchived?: boolean } = {}): Promise<MasterExport> {
+export async function getMasterExportData(): Promise<MasterExportData> {
   const supabase = await createClient();
-  const sheets: Record<string, ExportBike[]> = {};
-  const statusLabel = (code: string) => statusMeta(code).label;
+  const sheets: MasterExportData["sheets"] = { "Bryte & Hollard": [], Alpha: [] };
   let total = 0;
 
   for (let from = 0; ; from += PAGE_SIZE) {
-    let query = supabase
+    const { data, error } = await supabase
       .from("salvage_bikes")
       .select(SELECT_COLUMNS)
       .order("stock_number")
       .range(from, from + PAGE_SIZE - 1);
 
-    if (!includeArchived) query = query.eq("archived", false);
-
-    const { data, error } = await query;
     if (error) throw new Error(`Failed to build export: ${error.message}`);
 
     const page = (data ?? []) as unknown as Row[];
     for (const row of page) {
-      const name = row.insurance_companies?.name ?? null;
-      const sheet = sheetForInsurer(name);
-      (sheets[sheet] ??= []).push(
-        toExportRow({ ...row, insurance_company_name: name }, statusLabel)
-      );
+      const sheet = sheetForInsurer(row.insurance_companies?.name ?? null);
+      sheets[sheet].push({
+        ...row,
+        insurance_company_name: row.insurance_companies?.name ?? null,
+        source_row: (row.source_row as Record<string, string> | null) ?? null,
+      });
       total++;
     }
 

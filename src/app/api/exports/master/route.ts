@@ -1,17 +1,21 @@
 import * as XLSX from "xlsx";
 import { getCurrentProfile } from "@/lib/supabase/auth";
-import { getMasterExport } from "@/services/export";
-import { EXPORT_COLUMNS, SHEET_ORDER } from "@/lib/export-columns";
+import { getMasterExportData } from "@/services/export";
+import { buildMasterSheet } from "@/lib/master-export";
+import { BRYTE_HOLLARD_COLUMNS, ALPHA_COLUMNS } from "@/lib/master-layout";
 
 /**
- * Excel master export (client requirement: "We must keep a master").
+ * Excel master export — reproduces the client's own MSSA master workbook
+ * exactly: the same 121/102 columns per tab, the same headers, and the
+ * same live formulas (Outstanding, Profit, TAT, etc.), not a simplified
+ * substitute. The client was explicit that a lookalike export would mean
+ * re-entering data by hand into their real reporting file — this is the
+ * file itself, rebuilt from the database.
  *
- * A route handler rather than a Server Action because the response is a file
- * download. The query still runs under the caller's session, so RLS decides
- * what lands in the workbook.
- *
- * The export carries the client's entire salvage history and is explicitly
- * sensitive, so it is never cached and never served to a signed-out caller.
+ * A route handler rather than a Server Action because the response is a
+ * file download. The query still runs under the caller's session, so RLS
+ * decides what lands in the workbook. Never cached, never served to a
+ * signed-out caller — this carries the client's entire salvage history.
  */
 export async function GET() {
   const profile = await getCurrentProfile();
@@ -26,30 +30,28 @@ export async function GET() {
     });
   }
 
-  let exported;
+  let data;
   try {
-    exported = await getMasterExport();
+    data = await getMasterExportData();
   } catch (err) {
     console.error("[export] master export failed:", err);
     return new Response("Could not build the export.", { status: 500 });
   }
 
   const workbook = XLSX.utils.book_new();
-  const names = Object.keys(exported.sheets).sort(
-    (a, b) => SHEET_ORDER.indexOf(a) - SHEET_ORDER.indexOf(b)
+
+  const bryteHollardSheet = buildMasterSheet(
+    BRYTE_HOLLARD_COLUMNS,
+    data.sheets["Bryte & Hollard"],
+    { text: "MSSA SALVAGE MASTER", col: 4 }
   );
+  XLSX.utils.book_append_sheet(workbook, bryteHollardSheet, "Bryte & Hollard");
 
-  if (names.length === 0) {
-    const empty = XLSX.utils.aoa_to_sheet([[...EXPORT_COLUMNS]]);
-    XLSX.utils.book_append_sheet(workbook, empty, "Master");
-  }
-
-  for (const name of names) {
-    const sheet = XLSX.utils.json_to_sheet(exported.sheets[name], {
-      header: [...EXPORT_COLUMNS],
-    });
-    XLSX.utils.book_append_sheet(workbook, sheet, name.slice(0, 31));
-  }
+  const alphaSheet = buildMasterSheet(ALPHA_COLUMNS, data.sheets.Alpha, {
+    text: "IUM SALVAGE MASTER",
+    col: 2,
+  });
+  XLSX.utils.book_append_sheet(workbook, alphaSheet, "Alpha");
 
   const buffer: Buffer = XLSX.write(workbook, {
     type: "buffer",
