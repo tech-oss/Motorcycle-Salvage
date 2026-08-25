@@ -143,7 +143,16 @@ const HEADER_ALIASES: Record<string, ImportTargetField> = {
   "selling amount": "selling_amount",
   "insurance inv no": "insurance_invoice_no",
   "ium inv no": "insurance_invoice_no",
-  "insurance amount": "insurance_amount",
+  // "Insurance Amount" (bare) and "Insurance Amount inc VAT" are two
+  // different columns in the Bryte & Hollard sheet — the bare one is an
+  // invoice/payment-tracking figure (feeds Outstanding = Amount - Paid);
+  // "inc VAT" is the figure the client actually types as his "salvage
+  // value" and the one the commission chain is built on
+  // (verified: Insurance Return after comms = (AB - comms) / Retail).
+  // Only the "inc VAT" variant should claim insurance_amount — the bare
+  // header is deliberately left unmapped here so it falls through to the
+  // ledger passthrough instead of silently overwriting the real figure.
+  "insurance amount inc vat": "insurance_amount",
   "ium amount": "insurance_amount",
   "status": "status",
   "remarks": "notes",

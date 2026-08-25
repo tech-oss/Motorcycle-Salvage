@@ -14,8 +14,9 @@
  * `dbField` names match NormalizedRow / salvage_bikes columns 1:1 — set
  * only on the single column that "owns" that field, resolved the same way
  * the importer resolves duplicate headers (most-populated column wins),
- * so a near-empty duplicate column (e.g. "Retails" next to "Retail") is not
- * silently filled with data that never lived there.
+ * so a near-empty duplicate column (e.g. "Retails" next to "Retail", or
+ * "Insurance Amount" next to "Insurance Amount inc VAT") is not silently
+ * filled with data that never lived there.
  */
 
 export type ColumnKind = "field" | "formula" | "ledger";
@@ -33,6 +34,7 @@ export type MasterColumn = {
   /** Present when kind === "field". A NormalizedRow / bike DB field name. */
   dbField: string | null;
 };
+
 
 export const BRYTE_HOLLARD_COLUMNS: MasterColumn[] = [
   { index: 0, letter: "A", header: "ktm", kind: "ledger", formula: null, dbField: null },
@@ -62,7 +64,7 @@ export const BRYTE_HOLLARD_COLUMNS: MasterColumn[] = [
   { index: 24, letter: "Y", header: "INSURANCE INV to MSSA", kind: "formula", formula: "AB{R}-X{R}", dbField: null },
   { index: 25, letter: "Z", header: "Insurance Return after comms", kind: "formula", formula: "Y{R}/AJ{R}", dbField: null },
   { index: 26, letter: "AA", header: "Insurance Amount Exc VAT", kind: "formula", formula: "AB{R}/1.15", dbField: null },
-  { index: 27, letter: "AB", header: "Insurance Amount inc VAT", kind: "ledger", formula: null, dbField: null },
+  { index: 27, letter: "AB", header: "Insurance Amount inc VAT", kind: "field", formula: null, dbField: "insurance_amount" },
   { index: 28, letter: "AC", header: "Transport", kind: "formula", formula: "CR{R}+CX{R}", dbField: null },
   { index: 29, letter: "AD", header: "Dealerstock", kind: "ledger", formula: null, dbField: null },
   { index: 30, letter: "AE", header: "Total Cost", kind: "formula", formula: "Y{R}+AD{R}+AC{R}", dbField: null },
@@ -73,7 +75,7 @@ export const BRYTE_HOLLARD_COLUMNS: MasterColumn[] = [
   { index: 35, letter: "AJ", header: "Retail", kind: "field", formula: null, dbField: "retail_value" },
   { index: 36, letter: "AK", header: "% Amount", kind: "formula", formula: "AB{R}*15%", dbField: null },
   { index: 37, letter: "AL", header: "Insurance Inv No", kind: "field", formula: null, dbField: "insurance_invoice_no" },
-  { index: 38, letter: "AM", header: "Insurance Amount", kind: "field", formula: null, dbField: "insurance_amount" },
+  { index: 38, letter: "AM", header: "Insurance Amount", kind: "ledger", formula: null, dbField: null },
   { index: 39, letter: "AN", header: "Paid", kind: "ledger", formula: null, dbField: null },
   { index: 40, letter: "AO", header: "Outstanding", kind: "formula", formula: "AM{R}-AN{R}", dbField: null },
   { index: 41, letter: "AP", header: "Inv Request Date", kind: "ledger", formula: null, dbField: null },
@@ -262,4 +264,3 @@ export const ALPHA_COLUMNS: MasterColumn[] = [
   { index: 100, letter: "CW", header: "Remarks", kind: "field", formula: null, dbField: "notes" },
   { index: 101, letter: "CX", header: "Done", kind: "ledger", formula: null, dbField: null },
 ];
-

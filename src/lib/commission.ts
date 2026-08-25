@@ -50,9 +50,20 @@ export function computeCommissionChain({
       ? round2(insuranceAmount - totalCommsInclVat)
       : null;
 
-  const percentageAfterCommission =
+  const rawPercentage =
     insuranceInvToMssa !== null && retailValue !== null && retailValue > 0
       ? round2((insuranceInvToMssa / retailValue) * 100)
+      : null;
+
+  // The column is constrained to 0-100, matching what "a percentage of
+  // retail value" actually means. A result outside that range means one of
+  // the typed inputs is wrong (seen in the real data: a retail value of
+  // R270 on a bike clearly worth thousands, an obvious typo) — surfacing
+  // that as a blank rather than a nonsense 1,395% is more honest, and
+  // doesn't crash the save the way letting it hit the DB constraint would.
+  const percentageAfterCommission =
+    rawPercentage !== null && rawPercentage >= 0 && rawPercentage <= 100
+      ? rawPercentage
       : null;
 
   return { commission, totalCommsInclVat, insuranceInvToMssa, percentageAfterCommission };
